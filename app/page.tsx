@@ -1,3 +1,10 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import type { ReactNode } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
 const heroVideo = "https://framerusercontent.com/assets/iWlVr4qV5BuFxjhc6g7QcPK5o.mp4";
 
 const gradientImages = [
@@ -79,6 +86,14 @@ const faqs = [
   "Can I upgrade or downgrade my subscription plan?",
 ];
 
+type ManifestoPart = string | { symbol: string };
+
+const manifestoLines = [
+  ["We believe frontend development ", { symbol: "✧" }, " should feel creative - not repetitive."],
+  ["By building tools that are fast, intelligent, and intuitive, we help developers ", { symbol: "⌘" }, " transform Figma designs into responsive frontend experiences with less manual effort."],
+  ["With AI-assisted workflows ", { symbol: "▣" }, " designed for modern creators, we're simplifying the journey from design to deployment."],
+] satisfies ManifestoPart[][];
+
 function Logo() {
   return (
     <a className="brand" href="#">
@@ -88,7 +103,7 @@ function Logo() {
   );
 }
 
-function Button({ children, variant = "primary" }: { children: React.ReactNode; variant?: "primary" | "ghost" }) {
+function Button({ children, variant = "primary" }: { children: ReactNode; variant?: "primary" | "ghost" }) {
   return (
     <a className={`button ${variant}`} href="#">
       {children}
@@ -150,7 +165,68 @@ function Mockup({ tone, image }: { tone: string; image: string }) {
   );
 }
 
+function AnimatedWords({ parts }: { parts: ManifestoPart[] }) {
+  return (
+    <>
+      {parts.map((part, partIndex) => {
+        if (typeof part !== "string") {
+          return (
+            <span className="manifesto-word" key={`symbol-${partIndex}`}>
+              <strong>{part.symbol}</strong>
+            </span>
+          );
+        }
+
+        return part.split(/(\s+)/).map((word, wordIndex) => {
+          if (/^\s+$/.test(word)) {
+            return word;
+          }
+
+          if (!word) {
+            return null;
+          }
+
+          return (
+            <span className="manifesto-word" key={`${partIndex}-${wordIndex}`}>
+              {word}
+            </span>
+          );
+        });
+      })}
+    </>
+  );
+}
+
 export default function Home() {
+  const manifestoRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const context = gsap.context(() => {
+      const words = gsap.utils.toArray<HTMLElement>(".manifesto-word");
+
+      gsap.fromTo(
+        words,
+        { color: "rgba(255, 255, 255, 0.16)" },
+        {
+          color: "rgba(255, 255, 255, 1)",
+          ease: "none",
+          duration: 0.35,
+          stagger: 0.025,
+          scrollTrigger: {
+            trigger: manifestoRef.current,
+            start: "top 86%",
+            end: "+=430",
+            scrub: true,
+          },
+        },
+      );
+    }, manifestoRef);
+
+    return () => context.revert();
+  }, []);
+
   return (
     <main>
       <header className="site-header">
@@ -190,22 +266,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="manifesto">
-        <p>
-  We believe frontend development <strong>✧</strong> should feel creative - not repetitive.
-</p>
-
-<p>
-  By building tools that are fast, intelligent, and intuitive, we help developers{" "}
-  <strong>⌘</strong> transform Figma designs into responsive frontend experiences
-  with less manual effort.
-</p>
-
-<p>
-  With AI-assisted workflows <strong>▣</strong> designed for modern creators,
-  we&apos;re simplifying the journey from design to deployment.
-</p>
-</section>
+      <section className="manifesto" ref={manifestoRef}>
+        <div className="manifesto-copy">
+          {manifestoLines.map((line, index) => (
+            <p key={index}>
+              <AnimatedWords parts={line} />
+            </p>
+          ))}
+        </div>
+      </section>
 
       <section className="core">
         <h2>The core of smarter innovation</h2>
