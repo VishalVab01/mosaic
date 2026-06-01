@@ -200,32 +200,40 @@ function AnimatedWords({ parts }: { parts: ManifestoPart[] }) {
 export default function Home() {
   const manifestoRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    gsap.registerPlugin(ScrollTrigger);
+ useEffect(() => {
+  gsap.registerPlugin(ScrollTrigger);
 
-    const context = gsap.context(() => {
-      const words = gsap.utils.toArray<HTMLElement>(".manifesto-word");
+  const context = gsap.context(() => {
+    const words = gsap.utils.toArray<HTMLElement>(".manifesto-word");
 
-      gsap.fromTo(
-        words,
-        { color: "rgba(255, 255, 255, 0.16)" },
-        {
-          color: "rgba(255, 255, 255, 1)",
-          ease: "none",
-          duration: 0.35,
-          stagger: 0.025,
-          scrollTrigger: {
-            trigger: manifestoRef.current,
-            start: "top 86%",
-            end: "+=430",
-            scrub: true,
-          },
-        },
-      );
-    }, manifestoRef);
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: manifestoRef.current,
+        start: "top 20%",
+        end: "+=1200",        // 2000px of scroll distance regardless of element height
+        scrub: 2,
+        pin: true,  // pins the section while scrolling through it
+      },
+    });
 
-    return () => context.revert();
-  }, []);
+    tl.fromTo(
+      words,
+      {
+        opacity: 0.1,
+        filter: "blur(8px)",
+      },
+      {
+        opacity: 1,
+        filter: "blur(0px)",
+        stagger: 0.1,
+        ease: "none",
+        duration: 1,
+      }
+    );
+  }, manifestoRef);
+
+  return () => context.revert();
+}, []);
 
   return (
     <main>
