@@ -1,10 +1,13 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import AuthForm from "../components/AuthForm";
+import { UserRoundPen } from "lucide-react";
+import Link from "next/link";
 
 const heroVideo = "https://framerusercontent.com/assets/iWlVr4qV5BuFxjhc6g7QcPK5o.mp4";
 
@@ -222,6 +225,8 @@ export default function Home() {
   const manifestoRef = useRef<HTMLElement>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup" | null>(null);
 
+  const { data: session, status } = useSession();
+
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
 
@@ -267,8 +272,28 @@ export default function Home() {
               {item}
             </a>
           ))}
+
         </nav>
-        <Button href="/signup" onClick={() => setAuthMode("signup")}>Get started</Button>
+          <div className="header-auth">
+
+
+                    {status === "loading" ? (
+              <div style={{ width: "42px", height: "42px" }} />
+            ) : session ? (
+              <div>
+
+              <Link href="/profile" className="profile-btn">
+                <UserRoundPen size={20} />
+              </Link>
+              </div>
+            ) : (
+              <Button href="/signup" onClick={() => setAuthMode("signup")}>
+                Get started
+              </Button>
+            )}
+            </div>
+
+          
       </header>
 
       <section className="hero">
