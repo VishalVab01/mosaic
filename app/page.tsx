@@ -24,18 +24,18 @@ const navItems = ["About", "Workflow", "Generate", "Contact"];
 
 const coreCards = [
   {
-    title: "AI Automation",
-    text: "Automate routine tasks like lead handling and customer replies to let your team focus on what matters most.",
+    title: "Figma Import",
+    text: "Convert Figma designs into structured frontend layouts automatically. Import frames, components, spacing, and typography without manual setup.",
     icon: "orbit",
   },
   {
-    title: "Data Insights",
-    text: "Discover trends, predict user behavior, and segment your audience with precision to make smarter, data-backed business decisions.",
+    title: "Clean Code Generation",
+    text: "Generate responsive React, Next.js, HTML, CSS, and Tailwind code that follows modern development practices and clean component architecture.",
     icon: "data",
   },
   {
-    title: "Adaptive AI",
-    text: "We build AI systems that grow with your business, adapt to your data, and keep you ahead in a changing market.",
+    title: "Responsive Conversion",
+    text: "Automatically adapt desktop designs for tablet and mobile screens while preserving spacing, alignment, and visual consistency.",
     icon: "layers",
   },
 ];
@@ -102,7 +102,7 @@ function Logo() {
   return (
     <a className="brand" href="#">
       <span className="brand-mark" aria-hidden="true" />
-      <span>MONO AI</span>
+      <span>Mosaic</span>
     </a>
   );
 }
@@ -388,26 +388,65 @@ export default function Home() {
       </section> */}
 
       <section className="case-studies">
-        <h2>Meet the companies working more efficiently with AI</h2>
-        <article>
-          <div className="case-copy">
-            <h3>&quot;Working with this AI platform helped us launch faster and smarter than ever before.&quot;</h3>
-            <div className="stats"><b>+50%</b><span>Conversion</span><b>+144%</b><span>ROI</span></div>
-            <Button href="/signup" onClick={() => setAuthMode("signup")} variant="ghost">Get started</Button>
+        <h2>Accelerate Frontend Development</h2>
+            <article>
+        <div className="case-copy">
+          <h3>
+            Turn Figma designs into production-ready frontend code.
+          </h3>
+
+          <div className="stats">
+            <b>5 Min</b>
+            <span>Generation Time</span>
+
+            <b>80%</b>
+            <span>Less Manual Work</span>
           </div>
-          <div className="brand-tile blue">Cloud</div>
-        </article>
-        <article className="reverse">
-          <div className="brand-tile gold">Proline</div>
-          <div className="case-copy">
-            <h3>&quot;We&apos;ve seen a 40% drop in support tickets after integrating their AI assistant.&quot;</h3>
-            <div className="stats"><b>+119%</b><span>Conversion</span><b>+208%</b><span>ROI</span></div>
-            <Button href="/signup" onClick={() => setAuthMode("signup")} variant="ghost">Get started</Button>
-          </div>
-        </article>
+
+          <Button
+            href="/signup"
+            onClick={() => setAuthMode("signup")}
+            variant="ghost"
+          >
+            Generate Code
+          </Button>
+        </div>
+
+        <div className="brand-tile blue">
+          FIGMA → REACT
+        </div>
+      </article>
+
+<article className="reverse">
+  <div className="brand-tile gold">
+    REACT + TAILWIND
+  </div>
+
+  <div className="case-copy">
+    <h3>
+      Responsive components generated automatically.
+    </h3>
+
+    <div className="stats">
+      <b>100%</b>
+      <span>Responsive</span>
+
+      <b>React</b>
+      <span>Ready</span>
+    </div>
+
+    <Button
+      href="/signup"
+      onClick={() => setAuthMode("signup")}
+      variant="ghost"
+    >
+      Learn More
+    </Button>
+  </div>
+</article>
       </section>
 
-      <section className="integrations">
+      {/* <section className="integrations">
         <div>
           <h2>Seamless integrations with your favorite tools</h2>
           <p>Connect our AI with the apps you already use, including calendars, docs, messaging platforms, and more.</p>
@@ -418,9 +457,9 @@ export default function Home() {
             <span key={i}>{["◆", "✳", "◒", "◈", "▰", "✦"][i % 6]}</span>
           ))}
         </div>
-      </section>
+      </section> */}
 
-      <section className="next-gen" id="pricing">
+      {/* <section className="next-gen" id="pricing">
         <div className="section-heading">
           <h2>Next-gen AI features</h2>
           <div className="arrow-buttons"><button>‹</button><button>›</button></div>
@@ -434,7 +473,7 @@ export default function Home() {
             </article>
           ))}
         </div>
-      </section>
+      </section> */}
 
       <section className="quote">
         <blockquote>&quot;The AI does the heavy lifting so our team can focus on strategy. We&apos;re faster, more efficient, and more confident in decisions.&quot;</blockquote>
@@ -465,8 +504,10 @@ export default function Home() {
 
       <footer>
         <div>
-          <Logo />
-          <p>Built for modern frontend workflows.</p>
+          <Logo 
+          />
+          <p>Built for modern fr
+            ontend workflows.</p>
         </div>
         <div>
           <h3>Product</h3>
