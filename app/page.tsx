@@ -6,8 +6,7 @@ import type { ReactNode } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import AuthForm from "../components/AuthForm";
-import { UserRoundPen } from "lucide-react";
-import Link from "next/link";
+import UserMenu from "../components/UserMenu";
 
 const heroVideo = "https://framerusercontent.com/assets/iWlVr4qV5BuFxjhc6g7QcPK5o.mp4";
 
@@ -277,15 +276,10 @@ export default function Home() {
           <div className="header-auth">
 
 
-                    {status === "loading" ? (
+            {status === "loading" ? (
               <div style={{ width: "42px", height: "42px" }} />
             ) : session ? (
-              <div>
-
-              <Link href="/profile" className="profile-btn">
-                <UserRoundPen size={20} />
-              </Link>
-              </div>
+              <UserMenu />
             ) : (
               <Button href="/signup" onClick={() => setAuthMode("signup")}>
                 Get started
