@@ -2,30 +2,24 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
-  ArrowUpRight,
   CheckCircle2,
-  Code2,
-  Frame,
-  ImagePlus,
+  Clapperboard,
+  CreditCard,
+  LayoutDashboard,
   LogOut,
+  Menu,
   Paperclip,
-  Shuffle,
-  Sparkles,
+  Plug,
+  Plus,
+  Settings,
+  ShoppingBag,
+  UserRound,
+  X,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import "./generate.css";
-
-const heroVideo =
-  "https://framerusercontent.com/assets/iWlVr4qV5BuFxjhc6g7QcPK5o.mp4";
-
-const examplePrompts = [
-  "Loyalty punch card for a coffee shop",
-  "Digital menu for a coffee shop",
-  "Wholesale order form for an indie food brand",
-  "CRM for a salon",
-  "Inventory tracker for a jewelry store",
-];
 
 export default function GeneratePage() {
   return (
@@ -38,11 +32,34 @@ export default function GeneratePage() {
 function GenerateExperience() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [figmaLink, setFigmaLink] = useState("");
   const [fileName, setFileName] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userInitial = session?.user?.name?.trim().charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || "M";
+  const userImage = imageFailed ? null : session?.user?.image;
+  const mockGenerations = [
+    {
+      title: "YouTube clone",
+      prompt: "Build a polished YouTube clone with a responsive sidebar, video grid, search, categories, and a modern dark theme.",
+      icon: Clapperboard,
+    },
+    {
+      title: "SaaS dashboard",
+      prompt: "Create a modern SaaS analytics dashboard with charts, activity feeds, team management, and responsive navigation.",
+      icon: LayoutDashboard,
+    },
+    {
+      title: "Fashion store",
+      prompt: "Build a premium fashion ecommerce storefront with product filters, product cards, cart interactions, and a clean editorial style.",
+      icon: ShoppingBag,
+    },
+  ];
 
   useEffect(() => {
     const authStatus = searchParams.get("auth");
@@ -62,7 +79,7 @@ function GenerateExperience() {
     const prompt = figmaLink.trim();
 
     if (!prompt) {
-      setGenerationError("Add a Figma link or describe what you want to build first.");
+      setGenerationError("Paste your Figma file URL first.");
       return;
     }
 
@@ -78,46 +95,124 @@ function GenerateExperience() {
     router.push("/workspace");
   }
 
-  function handleImportFigma() {
-    const prompt = figmaLink.trim();
-
-    if (!prompt.includes("figma.com")) {
-      setGenerationError("Paste a Figma design URL in the prompt box, then click Import Figma.");
-      return;
-    }
-
-    handleGenerate();
+  function showComingSoon(label: string) {
+    setSuccessMessage(`${label} settings are coming soon.`);
+    window.setTimeout(() => setSuccessMessage(""), 3200);
   }
 
   return (
-    <main className="generate-page">
-      <video
-        className="generate-background-video"
-        aria-hidden="true"
-        autoPlay
-        muted
-        loop
-        playsInline
-        src={heroVideo}
-      />
-      <div className="generate-glow" aria-hidden="true" />
-
-      <header className="generate-header">
-        <a className="brand" href="/generate">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>Mosaic</span>
-        </a>
-
-        <div className="generate-header-center">
-          <span className="generate-status-dot" />
-          AI workspace
-        </div>
-
-        <button className="generate-back-link" onClick={() => signOut({ callbackUrl: "/" })} type="button">
-          <LogOut size={16} />
-          Log out
+    <main className={`generate-page${isSidebarOpen ? " sidebar-open" : ""}`}>
+      <aside className="generate-sidebar" aria-label="Generate navigation">
+        <button
+          aria-expanded={isSidebarOpen}
+          aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+          className="generate-sidebar-button generate-menu-button"
+          onClick={() => {
+            setIsSidebarOpen((value) => !value);
+            setIsSettingsOpen(false);
+          }}
+          type="button"
+        >
+          {isSidebarOpen ? <X size={22} /> : <Menu size={24} />}
+          <span>Menu</span>
         </button>
-      </header>
+
+        {isSidebarOpen && (
+          <>
+            <Link className="generate-sidebar-link generate-new-link" href="/generate">
+              <Plus size={19} />
+              <span>New generation</span>
+            </Link>
+
+            <div className="generate-recents">
+              <p>Recent generations</p>
+              {mockGenerations.map(({ title, prompt, icon: Icon }) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => {
+                    setFigmaLink(prompt);
+                    setGenerationError("");
+                  }}
+                >
+                  <Icon size={17} />
+                  <span>{title}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="generate-sidebar-bottom">
+          <div className="generate-settings">
+            {isSidebarOpen && isSettingsOpen && (
+              <div className="generate-settings-menu">
+                <p>Settings</p>
+                <Link href="/profile">
+                  <UserRound size={17} />
+                  <span>Profile</span>
+                </Link>
+                <button type="button" onClick={() => showComingSoon("Payments")}>
+                  <CreditCard size={17} />
+                  <span>Payments</span>
+                </button>
+                <button type="button" onClick={() => showComingSoon("Integrations")}>
+                  <Plug size={17} />
+                  <span>Integrations</span>
+                </button>
+                <button type="button" onClick={() => showComingSoon("Account")}>
+                  <Settings size={17} />
+                  <span>Account settings</span>
+                </button>
+              </div>
+            )}
+
+            <button
+              aria-expanded={isSettingsOpen}
+              aria-label="Settings"
+              className="generate-sidebar-button generate-settings-button"
+              onClick={() => {
+                if (!isSidebarOpen) {
+                  setIsSidebarOpen(true);
+                  setIsSettingsOpen(true);
+                  return;
+                }
+
+                setIsSettingsOpen((value) => !value);
+              }}
+              type="button"
+            >
+              <Settings size={21} />
+              <span>Settings</span>
+            </button>
+          </div>
+
+          <button
+            aria-label="Log out"
+            className="generate-account-button"
+            onClick={() => signOut({ callbackUrl: "/" })}
+            type="button"
+          >
+            <span className="generate-avatar">
+              {userImage ? (
+                <img
+                  alt={session?.user?.name || "Account"}
+                  onError={() => setImageFailed(true)}
+                  referrerPolicy="no-referrer"
+                  src={userImage}
+                />
+              ) : (
+                userInitial
+              )}
+            </span>
+            <span className="generate-account-copy">
+              <strong>{session?.user?.name || "Account"}</strong>
+              <small>Log out</small>
+            </span>
+            {isSidebarOpen && <LogOut size={17} />}
+          </button>
+        </div>
+      </aside>
 
       {successMessage && (
         <div className="generate-success-toast" role="status" aria-live="polite">
@@ -128,130 +223,46 @@ function GenerateExperience() {
 
       <section className="generate-hero">
         <div className="generate-copy">
-          <div className="generate-kicker">
-            <Sparkles size={14} />
-            Figma to frontend
-          </div>
-
-          <h1>
-            Turn your Figma designs into{" "}
-            <em>production-ready code.</em>
-          </h1>
-
+          <h1>Turn your Figma designs into production-ready code.</h1>
           <p>
-            Paste a Figma file link, add any visual references, and let Mosaic
-            build a clean, responsive frontend foundation in minutes.
+            Paste your Figma link, optionally attach reference images, and generate your application instantly.
           </p>
         </div>
 
         <div className="generate-composer">
-          <div className="generate-composer-topline">
-            <span>
-              <Frame size={16} />
-              New generation
-            </span>
-            <span className="generate-model">Mosaic v1</span>
-          </div>
-
-          <label className="generate-field-label" htmlFor="figma-link">
-            Prompt or Figma file URL
-          </label>
           <textarea
-            id="figma-link"
-            rows={3}
-            placeholder="Paste a Figma link or describe what you want to build..."
+            aria-label="Figma file URL"
+            rows={2}
+            placeholder="Paste your Figma file URL here..."
             value={figmaLink}
             onChange={(event) => setFigmaLink(event.target.value)}
           />
 
           <div className="generate-toolbar">
-            <div className="generate-attachments">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(event) =>
-                  setFileName(event.target.files?.[0]?.name ?? "")
-                }
-              />
-              <button
-                className="generate-attach-button"
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {fileName ? <ImagePlus size={17} /> : <Paperclip size={17} />}
-                <span>{fileName || "Add reference"}</span>
-              </button>
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
+            />
+            <button
+              aria-label={fileName ? `Attached ${fileName}` : "Attach reference image"}
+              className="generate-attach-button"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={24} />
+            </button>
 
-            <div className="generate-actions">
-              <button
-                className="generate-figma-button"
-                onClick={handleImportFigma}
-                type="button"
-              >
-                Import Figma
-                <FigmaLogo />
-              </button>
-
-              <button
-                className="generate-run-button"
-                onClick={handleGenerate}
-                type="button"
-                disabled={!figmaLink.trim()}
-              >
-                Generate code
-                <ArrowUpRight size={17} />
-              </button>
-            </div>
+            <button className="generate-run-button" onClick={handleGenerate} type="button">
+              Run
+            </button>
           </div>
 
           {generationError && <p className="generate-error-message">{generationError}</p>}
         </div>
-
-        <div className="generate-prompt-suggestions" aria-label="Example prompts">
-          <p>
-            Not sure where to start? Try these
-            <Shuffle size={15} />
-          </p>
-
-          <div className="generate-suggestion-list">
-            {examplePrompts.map((prompt, index) => (
-              <button
-                className="generate-suggestion-chip"
-                key={prompt}
-                onClick={() => setFigmaLink(prompt)}
-                type="button"
-              >
-                <span className={`generate-chip-orb generate-chip-orb-${index + 1}`} aria-hidden="true" />
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="generate-benefits" aria-label="Generation features">
-          <span>
-            <Code2 size={15} />
-            Clean React code
-          </span>
-          <span>Responsive by default</span>
-          <span>Editable components</span>
-        </div>
       </section>
     </main>
-  );
-}
-
-function FigmaLogo() {
-  return (
-    <svg aria-hidden="true" className="figma-logo" viewBox="0 0 24 24">
-      <path d="M8 2h4v8H8a4 4 0 0 1 0-8z" fill="#f24e1e" />
-      <path d="M12 2h4a4 4 0 0 1 0 8h-4V2z" fill="#ff7262" />
-      <path d="M12 10h4a4 4 0 1 1-4 4v-4z" fill="#1abcfe" />
-      <path d="M8 10h4v8H8a4 4 0 0 1 0-8z" fill="#a259ff" />
-      <path d="M8 18h4v2a4 4 0 1 1-4-4h4v2H8z" fill="#0acf83" />
-    </svg>
   );
 }

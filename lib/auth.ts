@@ -77,12 +77,19 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, profile }) {
+      const providerImage =
+        profile && "picture" in profile && typeof profile.picture === "string"
+          ? profile.picture
+          : profile && "avatar_url" in profile && typeof profile.avatar_url === "string"
+            ? profile.avatar_url
+            : undefined;
+
       if (user) {
         token.id = user.id;
         token.name = user.name;
         token.email = user.email;
-        token.picture = user.image;
+        token.picture = user.image ?? providerImage ?? token.picture;
       } else if (process.env.MONGODB_URI && token.email && !token.picture) {
         const client = await clientPromise;
         const dbUser = await client
