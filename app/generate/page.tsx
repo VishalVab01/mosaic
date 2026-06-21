@@ -68,12 +68,18 @@ function GenerateExperience() {
       return;
     }
 
-    setSuccessMessage(authStatus === "signup" ? "Account created successfully." : "Welcome back. You are signed in.");
+    setSuccessMessage(authStatus === "signup" ? "Account created successfully." : "Logged in successfully.");
     router.replace("/generate", { scroll: false });
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
 
     const timer = window.setTimeout(() => setSuccessMessage(""), 4200);
     return () => window.clearTimeout(timer);
-  }, [router, searchParams]);
+  }, [successMessage]);
 
   function handleGenerate() {
     const prompt = figmaLink.trim();
@@ -97,7 +103,6 @@ function GenerateExperience() {
 
   function showComingSoon(label: string) {
     setSuccessMessage(`${label} settings are coming soon.`);
-    window.setTimeout(() => setSuccessMessage(""), 3200);
   }
 
   return (
@@ -215,7 +220,7 @@ function GenerateExperience() {
       </aside>
 
       {successMessage && (
-        <div className="generate-success-toast" role="status" aria-live="polite">
+        <div className="generate-success-toast" key={successMessage} role="status" aria-live="polite">
           <CheckCircle2 size={18} />
           <span>{successMessage}</span>
         </div>

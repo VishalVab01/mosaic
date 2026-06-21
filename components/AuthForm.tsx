@@ -49,7 +49,7 @@ export default function AuthForm({ mode, onModeChange }: AuthFormProps) {
   const searchParams = useSearchParams();
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [step, setStep] = useState<"options" | "email">(mode === "login" ? "email" : "options");
+  const [step, setStep] = useState<"options" | "email">("options");
   const [showPassword, setShowPassword] = useState(false);
 
   const isSignup = mode === "signup";
@@ -73,7 +73,7 @@ export default function AuthForm({ mode, onModeChange }: AuthFormProps) {
 
   function switchMode() {
     setError("");
-    setStep("email");
+    setStep("options");
     onModeChange?.(alternateMode);
   }
 
@@ -133,24 +133,39 @@ export default function AuthForm({ mode, onModeChange }: AuthFormProps) {
       </div>
 
       {step === "options" ? (
-        <div className="auth-options">
-          <button className="oauth-primary" type="button" onClick={() => handleOAuth("google")}>
-            <GoogleIcon />
-            Continue with Google
-          </button>
+        <>
+          {isSignup && (
+            <p className="auth-inline-switch">
+              Already have an account?{" "}
+              {onModeChange ? (
+                <button type="button" onClick={switchMode}>
+                  Sign in
+                </button>
+              ) : (
+                <Link href="/login">Sign in</Link>
+              )}
+            </p>
+          )}
 
-          <div className="oauth-secondary oauth-secondary-single">
-            <button type="button" onClick={() => handleOAuth("github")}>
-              <GitHubIcon />
-              Continue with GitHub
+          <div className="auth-options">
+            <button className="oauth-primary" type="button" onClick={() => handleOAuth("google")}>
+              <GoogleIcon />
+              Continue with Google
+            </button>
+
+            <div className="oauth-secondary oauth-secondary-single">
+              <button type="button" onClick={() => handleOAuth("github")}>
+                <GitHubIcon />
+                Continue with GitHub
+              </button>
+            </div>
+
+            <button className="email-option" type="button" onClick={() => setStep("email")}>
+              <Icon type="email" />
+              Continue with Email
             </button>
           </div>
-
-          <button className="email-option" type="button" onClick={() => setStep("email")}>
-            <Icon type="email" />
-            Continue with Email
-          </button>
-        </div>
+        </>
       ) : (
         <>
           <p className="auth-inline-switch">

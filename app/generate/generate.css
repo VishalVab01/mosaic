@@ -348,6 +348,7 @@
 
 .generate-success-toast {
   align-items: center;
+  animation: generate-toast-life 4.2s ease forwards;
   background: #111713;
   border: 1px solid rgba(148, 255, 178, 0.25);
   border-radius: 999px;
@@ -365,6 +366,24 @@
 
 .generate-success-toast svg {
   color: #94ffb2;
+}
+
+@keyframes generate-toast-life {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+
+  10%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
 }
 
 @media (max-height: 760px) and (min-width: 701px) {
