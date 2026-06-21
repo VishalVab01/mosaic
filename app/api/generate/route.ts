@@ -11,9 +11,17 @@ const requestSchema = z.object({
 const generationSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
-  html: z.string().min(1),
-  css: z.string().min(1),
-  js: z.string().optional().default(""),
+  previewHtml: z.string().min(1),
+  previewCss: z.string().min(1),
+  previewJs: z.string().optional().default(""),
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1),
+        content: z.string(),
+      }),
+    )
+    .min(1),
   notes: z.array(z.string()).optional().default([]),
 });
 
@@ -125,13 +133,17 @@ function createGeminiPayload({ figmaLink, prompt }: { figmaLink?: string; prompt
         parts: [
           {
             text: [
-              "You are Mosaic, an expert frontend engineer generating polished app prototypes.",
+              "You are Mosaic, an expert React frontend engineer generating polished app prototypes.",
               "Return ONLY valid JSON with this shape:",
-              '{"title":"string","summary":"string","html":"string","css":"string","js":"string","notes":["string"]}',
-              "Build a complete, realistic single-page app screen or mini-flow based on the user request.",
-              "The generated code must be self-contained and previewable inside one HTML document.",
-              "Do not use external libraries, remote scripts, remote images, iframes, fetch calls, or backend calls.",
-              "Use semantic HTML, accessible labels, polished responsive CSS, and small vanilla JS only if useful.",
+              '{"title":"string","summary":"string","previewHtml":"string","previewCss":"string","previewJs":"string","files":[{"path":"string","content":"string"}],"notes":["string"]}',
+              "Build a complete, realistic React + Tailwind app screen or mini-flow based on the user request.",
+              "The files array must represent a proper Vite React project folder structure.",
+              "Always include at least these files: package.json, index.html, src/main.jsx, src/App.jsx, src/index.css, tailwind.config.js, postcss.config.js, README.md.",
+              "Use package.json dependencies compatible with a standard Vite React Tailwind project: react, react-dom, @vitejs/plugin-react, vite, tailwindcss 3.x, postcss, and autoprefixer.",
+              "Use Tailwind utility classes throughout the React components. Keep custom CSS minimal and only for base styles or animations.",
+              "Do not use remote images, iframes, backend calls, or paid libraries. Use local gradients, SVG, CSS, and realistic placeholder data.",
+              "previewHtml/previewCss/previewJs must be a self-contained static preview of the generated app for an iframe. It should visually match the React output.",
+              "The generated React code should be clean, componentized when useful, accessible, responsive, and ready to run with npm install && npm run dev.",
               "Avoid markdown fences. Avoid explanations outside JSON.",
               "",
               `User prompt: ${prompt}`,

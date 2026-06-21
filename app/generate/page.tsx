@@ -41,7 +41,6 @@ function GenerateExperience() {
   const [figmaLink, setFigmaLink] = useState("");
   const [fileName, setFileName] = useState("");
   const [generationError, setGenerationError] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,7 +58,7 @@ function GenerateExperience() {
     return () => window.clearTimeout(timer);
   }, [router, searchParams]);
 
-  async function handleGenerate() {
+  function handleGenerate() {
     const prompt = figmaLink.trim();
 
     if (!prompt) {
@@ -68,50 +67,15 @@ function GenerateExperience() {
     }
 
     setGenerationError("");
-    setIsGenerating(true);
-
-    try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          figmaLink: prompt.includes("figma.com") ? prompt : undefined,
-          prompt,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            generation?: {
-              title: string;
-              summary: string;
-              html: string;
-              css: string;
-              js?: string;
-              notes?: string[];
-            };
-            error?: string;
-          }
-        | null;
-
-      if (!response.ok || !payload?.generation) {
-        throw new Error(payload?.error ?? "Could not generate the app. Please try again.");
-      }
-
-      window.sessionStorage.setItem(
-        "mosaic.latestGeneration",
-        JSON.stringify({
-          ...payload.generation,
-          prompt,
-          generatedAt: new Date().toISOString(),
-        }),
-      );
-      router.push("/workspace");
-    } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : "Generation failed. Please try again.");
-    } finally {
-      setIsGenerating(false);
-    }
+    window.sessionStorage.setItem(
+      "mosaic.pendingGeneration",
+      JSON.stringify({
+        figmaLink: prompt.includes("figma.com") ? prompt : undefined,
+        prompt,
+        requestedAt: new Date().toISOString(),
+      }),
+    );
+    router.push("/workspace");
   }
 
   function handleImportFigma() {
@@ -122,7 +86,7 @@ function GenerateExperience() {
       return;
     }
 
-    void handleGenerate();
+    handleGenerate();
   }
 
   return (
@@ -224,7 +188,6 @@ function GenerateExperience() {
             <div className="generate-actions">
               <button
                 className="generate-figma-button"
-                disabled={isGenerating}
                 onClick={handleImportFigma}
                 type="button"
               >
@@ -236,9 +199,9 @@ function GenerateExperience() {
                 className="generate-run-button"
                 onClick={handleGenerate}
                 type="button"
-                disabled={!figmaLink.trim() || isGenerating}
+                disabled={!figmaLink.trim()}
               >
-                {isGenerating ? "Generating..." : "Generate code"}
+                Generate code
                 <ArrowUpRight size={17} />
               </button>
             </div>
