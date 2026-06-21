@@ -266,12 +266,16 @@ export default function Home() {
       <header className="site-header">
         <Logo />
         <nav>
-          {navItems.map((item) => (
-            <a href={`#${item.toLowerCase()}`} key={item}>
-              {item}
-              
-            </a>
-          ))}
+          {navItems.map((item) => {
+            const href =
+              item === "Generate" ? "/generate" : `#${item.toLowerCase()}`;
+
+            return (
+              <a href={href} key={item}>
+                {item}
+              </a>
+            );
+          })}
 
         </nav>
           <div className="header-auth">
@@ -302,9 +306,6 @@ export default function Home() {
           <div className="actions">
             <Button href="/signup" onClick={() => setAuthMode("signup")}>Get started</Button>
             <Button href="/login" onClick={() => setAuthMode("login")} variant="ghost">Sign in</Button>
-            <Button href="/nextpage" variant="ghost">
-              Next Page
-            </Button>
           </div>
         </div>
       </section>

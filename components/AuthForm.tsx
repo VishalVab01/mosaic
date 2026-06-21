@@ -52,9 +52,24 @@ export default function AuthForm({ mode, onModeChange }: AuthFormProps) {
   const [step, setStep] = useState<"options" | "email">(mode === "login" ? "email" : "options");
   const [showPassword, setShowPassword] = useState(false);
 
-  const callbackUrl = useMemo(() => searchParams.get("callbackUrl") ?? "/", [searchParams]);
   const isSignup = mode === "signup";
   const alternateMode = isSignup ? "login" : "signup";
+  const callbackUrl = useMemo(() => {
+    const requestedCallback = searchParams.get("callbackUrl");
+    const fallbackPath = `/generate?auth=${isSignup ? "signup" : "login"}`;
+
+    if (!requestedCallback) {
+      return fallbackPath;
+    }
+
+    try {
+      const url = new URL(requestedCallback, "http://localhost");
+      url.searchParams.set("auth", isSignup ? "signup" : "login");
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return fallbackPath;
+    }
+  }, [isSignup, searchParams]);
 
   function switchMode() {
     setError("");

@@ -19,7 +19,7 @@ export const authOptions: NextAuthOptions = {
   adapter: process.env.MONGODB_URI ? MongoDBAdapter(clientPromise) : undefined,
   pages: {
     signIn: "/login",
-    newUser: "/",
+    newUser: "/generate?auth=signup",
   },
   providers: [
     GoogleProvider({
