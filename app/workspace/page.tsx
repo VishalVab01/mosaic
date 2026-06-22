@@ -666,25 +666,80 @@ function preferFile(files: GeneratedFile[]) {
 }
 
 function createPreviewDocument(generation: Generation) {
+  const preview = normalizePreviewParts(generation);
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(generation.title)}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; }
-    ${generation.previewCss}
+    html, body { min-height: 100%; }
+    body { margin: 0; color: #111827; background: #ffffff; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    ${preview.css.replace(/<\/style/gi, "<\\/style")}
   </style>
 </head>
 <body>
-${generation.previewHtml}
+${preview.html}
 <script>
-${(generation.previewJs ?? "").replace(/<\/script/gi, "<\\/script")}
+${preview.js.replace(/<\/script/gi, "<\\/script")}
 </script>
 </body>
 </html>`;
+}
+
+function normalizePreviewParts(generation: Generation) {
+  let html = stripCodeFence(generation.previewHtml ?? "");
+  let css = stripCodeFence(generation.previewCss ?? "");
+  let js = stripCodeFence(generation.previewJs ?? "");
+
+  if (/<(?:!doctype|html|head|body)\b/i.test(html)) {
+    const embeddedStyles = Array.from(html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi))
+      .map((match) => match[1])
+      .join("\n");
+    const embeddedScripts = Array.from(html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))
+      .map((match) => match[1])
+      .join("\n");
+    const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+
+    css = [embeddedStyles, css].filter(Boolean).join("\n");
+    js = [embeddedScripts, js].filter(Boolean).join("\n");
+    html = body?.[1] ?? html;
+  }
+
+  html = html
+    .replace(/<!doctype[^>]*>/gi, "")
+    .replace(/<\/?(?:html|head|body)[^>]*>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .trim();
+
+  if (!html || /^<div\s+id=["']root["']\s*><\/div>$/i.test(html)) {
+    html = createPreviewFallback(generation);
+    js = "";
+  }
+
+  return { html, css, js };
+}
+
+function stripCodeFence(value: string) {
+  return value
+    .trim()
+    .replace(/^```(?:html|css|javascript|js|jsx)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+}
+
+function createPreviewFallback(generation: Generation) {
+  return `<main style="min-height:100vh;display:grid;place-items:center;padding:32px;background:#f8fafc;color:#0f172a">
+  <section style="max-width:680px;padding:40px;border:1px solid #e2e8f0;border-radius:28px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.10);text-align:center">
+    <span style="display:inline-flex;padding:7px 11px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">Mosaic preview</span>
+    <h1 style="margin:18px 0 12px;font-size:clamp(34px,6vw,62px);line-height:1;letter-spacing:-.05em">${escapeHtml(generation.title)}</h1>
+    <p style="margin:0;color:#64748b;font-size:17px;line-height:1.65">${escapeHtml(generation.summary)}</p>
+  </section>
+</main>`;
 }
 
 function readSessionJson<T>(key: string) {
