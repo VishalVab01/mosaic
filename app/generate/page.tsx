@@ -7,14 +7,12 @@ import {
   CheckCircle2,
   Clapperboard,
   CreditCard,
-  LayoutDashboard,
   LogOut,
   Menu,
   Paperclip,
   Plug,
   Plus,
   Settings,
-  ShoppingBag,
   UserRound,
   X,
 } from "lucide-react";
@@ -22,6 +20,19 @@ import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import "./generate.css";
+
+type RecentGeneration = {
+  id: string;
+  title: string;
+  summary: string;
+  previewHtml: string;
+  previewCss: string;
+  previewJs?: string;
+  files: Array<{ path: string; content: string }>;
+  notes?: string[];
+  prompt: string;
+  generatedAt?: string;
+};
 
 export default function GeneratePage() {
   return (
@@ -40,6 +51,7 @@ const prompts = [
   "Ask MOSAIC to design a food delivery app with live tracking...",
   "Ask MOSAIC to generate an e-commerce store for a fashion brand...",
 ];
+const DEFAULT_CREDIT_LIMIT = 10;
 
 function GenerateExperience() {
   const router = useRouter();
@@ -51,6 +63,7 @@ function GenerateExperience() {
   const [successMessage, setSuccessMessage] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isFigmaImportMode, setIsFigmaImportMode] = useState(false);
   const suggestions = [
     "Loyalty punch card for a coffee shop",
     "Digital menu for a coffee shop",
@@ -64,29 +77,19 @@ const [placeholder, setPlaceholder] = useState("");
 const [promptIndex, setPromptIndex] = useState(0);
   
   const [imageFailed, setImageFailed] = useState(false);
+  const [recentGenerations, setRecentGenerations] = useState<RecentGeneration[]>([]);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [creditLimit, setCreditLimit] = useState(DEFAULT_CREDIT_LIMIT);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const userInitial = session?.user?.name?.trim().charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || "M";
   const userImage = imageFailed ? null : session?.user?.image;
-  const mockGenerations = [
-    {
-      title: "YouTube clone",
-      prompt: "Build a polished YouTube clone with a responsive sidebar, video grid, search, categories, and a modern dark theme.",
-      icon: Clapperboard,
-    },
-    {
-      title: "SaaS dashboard",
-      prompt: "Create a modern SaaS analytics dashboard with charts, activity feeds, team management, and responsive navigation.",
-      icon: LayoutDashboard,
-    },
-    {
-      title: "Fashion store",
-      prompt: "Build a premium fashion ecommerce storefront with product filters, product cards, cart interactions, and a clean editorial style.",
-      icon: ShoppingBag,
-    },
-  ];
+  const creditsRemaining = credits ?? creditLimit;
+  const creditsUsed = Math.max(0, creditLimit - creditsRemaining);
+  const usagePercent = Math.min(100, Math.round((creditsUsed / creditLimit) * 100));
 
   useEffect(() => {
-  if (figmaLink) return;
+  if (figmaLink || isFigmaImportMode) return;
 
   const text = prompts[promptIndex];
   let i = 0;
@@ -106,7 +109,7 @@ const [promptIndex, setPromptIndex] = useState(0);
   }, 45);
 
   return () => clearInterval(typing);
-}, [promptIndex, figmaLink]);
+}, [promptIndex, figmaLink, isFigmaImportMode]);
 
   useEffect(() => {
     const authStatus = searchParams.get("auth");
@@ -128,23 +131,90 @@ const [promptIndex, setPromptIndex] = useState(0);
     return () => window.clearTimeout(timer);
   }, [successMessage]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAccountData() {
+      const [accountResponse, generationsResponse] = await Promise.all([
+        fetch("/api/account"),
+        fetch("/api/generations"),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (accountResponse.ok) {
+        const accountPayload = (await accountResponse.json().catch(() => null)) as { credits?: number; creditLimit?: number } | null;
+        setCredits(typeof accountPayload?.credits === "number" ? accountPayload.credits : null);
+        if (typeof accountPayload?.creditLimit === "number") {
+          setCreditLimit(accountPayload.creditLimit);
+        }
+      }
+
+      if (generationsResponse.ok) {
+        const generationsPayload = (await generationsResponse.json().catch(() => null)) as {
+          generations?: RecentGeneration[];
+        } | null;
+        setRecentGenerations(generationsPayload?.generations ?? []);
+      }
+    }
+
+    if (session?.user) {
+      void loadAccountData();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user]);
+
   function handleGenerate() {
     const prompt = figmaLink.trim();
+    const isFigmaLink = /https?:\/\/([a-z0-9-]+\.)?figma\.com\//i.test(prompt);
 
     if (!prompt) {
-      setGenerationError("Paste your Figma file URL first.");
+      setGenerationError(isFigmaImportMode ? "Paste your Figma link first." : "Describe what you want to build first.");
+      return;
+    }
+
+    if (isFigmaImportMode && !isFigmaLink) {
+      setGenerationError("Paste a valid Figma link to import the design.");
+      return;
+    }
+
+    if (credits === 0) {
+      setGenerationError("You are out of credits. Buy a plan to keep generating.");
       return;
     }
 
     setGenerationError("");
+    const generationPrompt = isFigmaLink
+      ? `Convert this Figma design into a production-ready React website: ${prompt}`
+      : prompt;
+
     window.sessionStorage.setItem(
       "mosaic.pendingGeneration",
       JSON.stringify({
-        figmaLink: prompt.includes("figma.com") ? prompt : undefined,
-        prompt,
+        figmaLink: isFigmaLink ? prompt : undefined,
+        prompt: generationPrompt,
         requestedAt: new Date().toISOString(),
       }),
     );
+    router.push("/workspace");
+  }
+
+  function enableFigmaImport() {
+    setIsFigmaImportMode(true);
+    setFigmaLink("");
+    setGenerationError("");
+    setPlaceholder("Paste your Figma link here");
+    requestAnimationFrame(() => promptInputRef.current?.focus());
+  }
+
+  function openRecentGeneration(generation: RecentGeneration) {
+    window.sessionStorage.removeItem("mosaic.pendingGeneration");
+    window.sessionStorage.setItem("mosaic.latestGeneration", JSON.stringify(generation));
     router.push("/workspace");
   }
 
@@ -176,19 +246,31 @@ const [promptIndex, setPromptIndex] = useState(0);
               <span>New generation</span>
             </Link>
 
+            <div className="generate-credits">
+              <div className="generate-credits-header">
+                <span>Usage</span>
+                <strong>{usagePercent}%</strong>
+              </div>
+              <div className="generate-usage-bar" aria-label={`${usagePercent}% credits used`}>
+                <i style={{ width: `${usagePercent}%` }} />
+              </div>
+              <small>
+                {credits === null ? "--" : creditsUsed} / {creditLimit} credits used
+              </small>
+            </div>
+
             <div className="generate-recents">
               <p>Recent generations</p>
-              {mockGenerations.map(({ title, prompt, icon: Icon }) => (
+              {recentGenerations.length === 0 && <small>No generations yet</small>}
+              {recentGenerations.map((generation) => (
                 <button
-                  key={title}
+                  key={generation.id}
                   type="button"
-                  onClick={() => {
-                    setFigmaLink(prompt);
-                    setGenerationError("");
-                  }}
+                  onClick={() => openRecentGeneration(generation)}
+                  title={generation.prompt}
                 >
-                  <Icon size={17} />
-                  <span>{title}</span>
+                  <Clapperboard size={17} />
+                  <span>{generation.title}</span>
                 </button>
               ))}
             </div>
@@ -294,6 +376,7 @@ const [promptIndex, setPromptIndex] = useState(0);
 
           <textarea
             aria-label="Figma file URL"
+            ref={promptInputRef}
             rows={2}
             value={figmaLink}
             onChange={(e) => setFigmaLink(e.target.value)}
@@ -311,18 +394,38 @@ const [promptIndex, setPromptIndex] = useState(0);
             }
           />
 
-          <button
-            aria-label={
-              fileName
-                ? `Attached ${fileName}`
-                : "Attach reference image"
-            }
-            className="generate-attach-button"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip size={24} />
-          </button>
+          <div className="generate-toolbar-left">
+            <button
+              aria-label={
+                fileName
+                  ? `Attached ${fileName}`
+                  : "Attach reference image"
+              }
+              className="generate-attach-button"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach reference image"
+            >
+              <Paperclip size={22} />
+            </button>
+
+            <button
+              aria-pressed={isFigmaImportMode}
+              className="generate-figma-button"
+              type="button"
+              onClick={enableFigmaImport}
+              title="Import Figma link"
+            >
+              <span className="generate-figma-logo" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </span>
+              <span>Import Figma</span>
+            </button>
+          </div>
 
         <button
           className="generate-run-button"
@@ -351,7 +454,10 @@ const [promptIndex, setPromptIndex] = useState(0);
               key={item}
               type="button"
               className="generate-suggestion-chip"
-              onClick={() => setFigmaLink(item)}
+              onClick={() => {
+                setIsFigmaImportMode(false);
+                setFigmaLink(item);
+              }}
             >
               <span className="generate-chip-dot" />
               {item}

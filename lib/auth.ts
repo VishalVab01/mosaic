@@ -1,10 +1,12 @@
 import { MongoDBAdapter } from "@next-auth/mongodb-adapter";
 import bcrypt from "bcryptjs";
+import { ObjectId } from "mongodb";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import { z } from "zod";
+import { FREE_SIGNUP_CREDITS } from "./account";
 import clientPromise from "./mongodb";
 
 const credentialsSchema = z.object({
@@ -122,6 +124,23 @@ export const authOptions: NextAuthOptions = {
       }
 
       return session;
+    },
+  },
+  events: {
+    async createUser({ user }) {
+      if (!process.env.MONGODB_URI || !user.id) {
+        return;
+      }
+
+      const client = await clientPromise;
+      if (!ObjectId.isValid(user.id)) {
+        return;
+      }
+
+      await client
+        .db()
+        .collection("users")
+        .updateOne({ _id: new ObjectId(user.id) }, { $set: { credits: FREE_SIGNUP_CREDITS, updatedAt: new Date() } });
     },
   },
   secret: authSecret,

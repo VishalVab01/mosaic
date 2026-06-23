@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { FREE_SIGNUP_CREDITS } from "../../../../lib/account";
 import clientPromise from "../../../../lib/mongodb";
 
 const signupSchema = z.object({
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     emailVerified: null,
     image: null,
     passwordHash,
+    credits: FREE_SIGNUP_CREDITS,
     createdAt: now,
     updatedAt: now,
   });

@@ -550,7 +550,7 @@ export default function Home() {
         className="developer-avatar"
       />
 
-      <h3>Vishal</h3>
+      <h3>Vishal Vaibhav</h3>
       <p>Shy Backend Developer</p>
 
       <div className="developer-links">
