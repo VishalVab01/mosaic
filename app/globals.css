@@ -103,6 +103,24 @@ footer a:hover {
   width: 30px;
 }
 
+.home-brand {
+  align-items: center;
+  font-size: 21px;
+  gap: 12px;
+  line-height: 1;
+}
+
+.home-brand .brand-mark {
+  height: 38px;
+  width: 48px;
+}
+
+.home-brand span:last-child {
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(1px);
+}
+
 .button {
   align-items: center;
   border: 1px solid var(--line-strong);
@@ -1539,6 +1557,16 @@ footer .brand {
 }
 
 @media (max-width: 560px) {
+  .home-brand {
+    font-size: 18px;
+    gap: 9px;
+  }
+
+  .home-brand .brand-mark {
+    height: 31px;
+    width: 39px;
+  }
+
   .site-header .button {
     min-height: 38px;
     padding: 0 14px;

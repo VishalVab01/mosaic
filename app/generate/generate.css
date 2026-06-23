@@ -6,6 +6,7 @@
 }
 
 .generate-sidebar {
+  animation: generate-sidebar-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   background: #050506;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   bottom: 0;
@@ -315,6 +316,7 @@
 }
 
 .generate-copy h1 {
+  animation: generate-rise-in 780ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
   font-size: clamp(48px, 5.2vw, 72px);
   font-weight: 400;
   letter-spacing: -0.062em;
@@ -323,6 +325,7 @@
 }
 
 .generate-copy p {
+  animation: generate-rise-in 760ms cubic-bezier(0.16, 1, 0.3, 1) 190ms both;
   color: rgba(255, 255, 255, 0.64);
   font-size: 17px;
   line-height: 1.55;
@@ -331,6 +334,7 @@
 }
 
 .generate-composer {
+  animation: generate-panel-in 820ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
   background: #111113;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
@@ -348,7 +352,7 @@
   display: block;
   font: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.4;
   min-height: 36px;
   outline: none;
@@ -370,6 +374,7 @@
 
 .generate-toolbar-left {
   align-items: center;
+  animation: generate-fade-in 560ms ease 620ms both;
   display: flex;
   gap: 6px;
   min-width: 0;
@@ -449,6 +454,7 @@
 }
 
 .generate-run-button {
+  animation: generate-button-pop 540ms cubic-bezier(0.16, 1, 0.3, 1) 680ms both;
   border-radius: 11px;
   font-size: 14px;
   min-width: 52px;
@@ -460,6 +466,55 @@
 .generate-run-button:hover {
   background: #232326;
   transform: translateY(-1px);
+}
+
+.generate-reference-chip {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  display: inline-flex;
+  font-size: 13px;
+  gap: 7px;
+  margin-top: 10px;
+  max-width: 100%;
+  padding: 5px 6px 5px 10px;
+}
+
+.generate-reference-chip img {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 22px;
+  object-fit: cover;
+  width: 22px;
+}
+
+.generate-reference-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generate-reference-chip button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  width: 20px;
+}
+
+.generate-reference-chip button:hover,
+.generate-reference-chip button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 .generate-error-message {
@@ -595,12 +650,38 @@
   font-style: italic;
   letter-spacing: -0.03em;
 }
-.generate-copy h1 span {
-  font-size: 1.35em;
-  line-height: 1;
-  background: linear-gradient(90deg, #9460EA, #68B5F3);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.figma-handwriting-logo {
+  display: inline-block;
+  height: 1.3em;
+  margin: 0 0.14em 0 0.02em;
+  overflow: visible;
+  transform: translateY(0.28em);
+  vertical-align: baseline;
+  width: 2.62em;
+}
+
+.figma-handwriting-stroke {
+  animation: figma-write 3.6s cubic-bezier(0.65, 0, 0.35, 1) 540ms forwards;
+  fill: none;
+  font-size: 126px;
+  font-weight: 400;
+  letter-spacing: 0;
+  stroke: url("#figma-word-gradient");
+  stroke-dasharray: 980;
+  stroke-dashoffset: 980;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.figma-handwriting-fill {
+  animation: figma-fill-in 520ms ease 3.7s forwards;
+  dominant-baseline: alphabetic;
+  fill: url("#figma-word-gradient");
+  font-size: 126px;
+  font-weight: 400;
+  letter-spacing: 0;
+  opacity: 0;
 }
 .generate-textarea-wrapper {
   position: relative;
@@ -617,7 +698,7 @@
   color: rgba(255, 255, 255, 0.28);
   font: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.4;
 }
 
@@ -637,7 +718,116 @@
     opacity: 0;
   }
 }
+
+@keyframes generate-sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes generate-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes generate-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes generate-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes generate-button-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes generate-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes figma-write {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes figma-fill-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generate-sidebar,
+  .generate-copy h1,
+  .generate-copy p,
+  .generate-composer,
+  .generate-toolbar-left,
+  .generate-run-button,
+  .generate-suggestions,
+  .generate-suggestion-chip,
+  .figma-handwriting-stroke,
+  .figma-handwriting-fill {
+    animation: none;
+  }
+
+  .figma-handwriting-stroke {
+    stroke-dashoffset: 0;
+  }
+
+  .figma-handwriting-fill {
+    opacity: 1;
+  }
+}
 .generate-suggestions {
+  animation: generate-rise-in 760ms cubic-bezier(0.16, 1, 0.3, 1) 460ms both;
   margin-top: 24px;
   max-width: 1050px;
   width: 100%;
@@ -659,6 +849,7 @@
 
 .generate-suggestion-chip {
   align-items: center;
+  animation: generate-chip-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   background: #101012;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -693,4 +884,24 @@
     #ea7a67
   );
   flex-shrink: 0;
+}
+
+.generate-suggestion-chip:nth-child(1) {
+  animation-delay: 560ms;
+}
+
+.generate-suggestion-chip:nth-child(2) {
+  animation-delay: 620ms;
+}
+
+.generate-suggestion-chip:nth-child(3) {
+  animation-delay: 680ms;
+}
+
+.generate-suggestion-chip:nth-child(4) {
+  animation-delay: 740ms;
+}
+
+.generate-suggestion-chip:nth-child(5) {
+  animation-delay: 800ms;
 }

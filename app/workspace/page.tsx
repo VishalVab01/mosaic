@@ -63,7 +63,7 @@ type PendingGeneration = {
   requestedAt?: string;
 };
 
-type GenerationContext = Pick<Generation, "title" | "summary" | "prompt" | "previewHtml" | "previewCss" | "previewJs" | "files">;
+type GenerationContext = Pick<Generation, "id" | "title" | "summary" | "prompt" | "previewHtml" | "previewCss" | "previewJs" | "files">;
 
 type ReferenceImage = {
   data: string;
@@ -139,7 +139,7 @@ p { margin: 0; font-size: 16px; font-weight: 400; line-height: 1.45; text-transf
 };
 
 export default function WorkspacePage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [generation, setGeneration] = useState<Generation>(emptyGeneration);
   const [prompt, setPrompt] = useState("");
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("preview");
@@ -169,18 +169,42 @@ export default function WorkspacePage() {
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const previewPageMenuRef = useRef<HTMLDivElement>(null);
   const workspacePageRef = useRef<HTMLElement>(null);
+  const consumedPendingGenerationRef = useRef(false);
+  const pendingGenerationKey = getUserStorageKey("pendingGeneration", session?.user);
+  const latestGenerationKey = getUserStorageKey("latestGeneration", session?.user);
 
   useEffect(() => {
-    const pending = readSessionJson<PendingGeneration>("mosaic.pendingGeneration");
-    const stored = readSessionJson<Generation>("mosaic.latestGeneration");
+    if (sessionStatus === "loading") {
+      return;
+    }
+
+    const anonymousPendingKey = getUserStorageKey("pendingGeneration");
+    const pending =
+      readSessionJson<PendingGeneration>(pendingGenerationKey) ??
+      readSessionJson<PendingGeneration>(anonymousPendingKey) ??
+      readSessionJson<PendingGeneration>("mosaic.pendingGeneration");
+    const stored = readSessionJson<Generation>(latestGenerationKey);
+
+    window.sessionStorage.removeItem(anonymousPendingKey);
+    window.sessionStorage.removeItem("mosaic.pendingGeneration");
+    window.sessionStorage.removeItem("mosaic.latestGeneration");
 
     if (pending?.prompt) {
-      window.sessionStorage.removeItem("mosaic.pendingGeneration");
+      consumedPendingGenerationRef.current = true;
+      window.sessionStorage.removeItem(pendingGenerationKey);
+      setGeneration(emptyGeneration);
+      setSelectedFilePath(emptyGeneration.files[0]?.path ?? "");
+      setActivePreviewPath("/");
+      setChatMessages([]);
       void startGeneration(pending.prompt, {
         addUserMessage: true,
         figmaLink: pending.figmaLink,
         source: "initial",
       });
+      return;
+    }
+
+    if (consumedPendingGenerationRef.current) {
       return;
     }
 
@@ -201,7 +225,7 @@ export default function WorkspacePage() {
         },
       ]);
     }
-  }, []);
+  }, [latestGenerationKey, pendingGenerationKey, sessionStatus]);
 
   useEffect(() => {
     const handleBuildModeShortcut = (event: KeyboardEvent) => {
@@ -229,7 +253,8 @@ export default function WorkspacePage() {
     setGenerationUpdateIndex(0);
 
     const timer = window.setInterval(() => {
-      setGenerationUpdateIndex((index) => Math.min(index + 1, generationUpdates.length - 1));
+      const lastInProgressIndex = Math.max(0, generationUpdates.length - 2);
+      setGenerationUpdateIndex((index) => Math.min(index + 1, lastInProgressIndex));
     }, 2400);
 
     return () => window.clearInterval(timer);
@@ -323,13 +348,15 @@ export default function WorkspacePage() {
     setPrompt("");
     setWorkspaceTab("preview");
     setStatusMessage(currentGenerationContext ? "Mosaic is updating your React + Tailwind project..." : "Mosaic is building your React + Tailwind project...");
-    setGeneration(createLoadingGeneration(cleanPrompt));
-    setSelectedFilePath("src/App.jsx");
-    setActivePreviewPath("/");
+    if (!currentGenerationContext) {
+      setGeneration(createLoadingGeneration(cleanPrompt));
+      setSelectedFilePath("src/App.jsx");
+      setActivePreviewPath("/");
+    }
     setIsPlusMenuOpen(false);
 
     setChatMessages((messages) => [
-      ...messages.filter((message) => message.id !== "welcome"),
+      ...(options.source === "initial" ? [] : messages.filter((message) => message.id !== "welcome")),
       ...(options.addUserMessage
         ? [
             {
@@ -380,7 +407,7 @@ export default function WorkspacePage() {
       setReferenceImage(null);
       setSelectedFilePath(preferFile(nextGeneration.files));
       setActivePreviewPath(buildPreviewPages(nextGeneration)[0]?.path ?? "/");
-      window.sessionStorage.setItem("mosaic.latestGeneration", JSON.stringify(nextGeneration));
+      writeLatestGeneration(nextGeneration);
       setStatusMessage("Preview updated.");
       setCredits(payload.creditsRemaining ?? credits);
       if (typeof payload.creditLimit === "number") {
@@ -392,7 +419,9 @@ export default function WorkspacePage() {
         {
           id: `${requestId}-done`,
           role: "assistant",
-          text: `Done - I built "${nextGeneration.title}" as a React + Tailwind project.${
+          text: currentGenerationContext ? `Done - I updated "${nextGeneration.title}" with your requested change.${
+            typeof payload.creditsRemaining === "number" ? ` You have ${payload.creditsRemaining} credits left.` : ""
+          }` : `Done - I built "${nextGeneration.title}" as a React + Tailwind project.${
             typeof payload.creditsRemaining === "number" ? ` You have ${payload.creditsRemaining} credits left.` : ""
           } You can preview it, inspect files, or download the ZIP.`,
         },
@@ -403,9 +432,11 @@ export default function WorkspacePage() {
       }
 
       const message = error instanceof Error ? error.message : "Something went wrong.";
-      setGeneration(emptyGeneration);
-      setSelectedFilePath(emptyGeneration.files[0]?.path ?? "");
-      setActivePreviewPath("/");
+      if (!currentGenerationContext) {
+        setGeneration(emptyGeneration);
+        setSelectedFilePath(emptyGeneration.files[0]?.path ?? "");
+        setActivePreviewPath("/");
+      }
       setStatusMessage(message);
       setIsGenerating(false);
       setChatMessages((messages) => [
@@ -423,11 +454,37 @@ export default function WorkspacePage() {
     }
   }
 
+  function writeLatestGeneration(nextGeneration: Generation) {
+    window.sessionStorage.setItem(latestGenerationKey, JSON.stringify(nextGeneration));
+    window.sessionStorage.removeItem("mosaic.latestGeneration");
+  }
+
   function submitPrompt() {
     const nextPrompt = prompt.trim();
 
     if (!nextPrompt) {
       setStatusMessage("Add a prompt before generating.");
+      return;
+    }
+
+    const conversationalReply = getConversationalReply(nextPrompt);
+
+    if (conversationalReply) {
+      const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      setPrompt("");
+      setChatMessages((messages) => [
+        ...messages,
+        {
+          id: `${requestId}-user`,
+          role: "user",
+          text: nextPrompt,
+        },
+        {
+          id: `${requestId}-assistant`,
+          role: "assistant",
+          text: conversationalReply,
+        },
+      ]);
       return;
     }
 
@@ -542,7 +599,7 @@ export default function WorkspacePage() {
 
     const nextGeneration = { ...generation, title: nextTitle };
     setGeneration(nextGeneration);
-    window.sessionStorage.setItem("mosaic.latestGeneration", JSON.stringify(nextGeneration));
+    writeLatestGeneration(nextGeneration);
     setIsProjectMenuOpen(false);
 
     const persisted = await updateStoredGeneration({ title: nextTitle });
@@ -553,7 +610,7 @@ export default function WorkspacePage() {
     const starred = !generation.starred;
     const nextGeneration = { ...generation, starred };
     setGeneration(nextGeneration);
-    window.sessionStorage.setItem("mosaic.latestGeneration", JSON.stringify(nextGeneration));
+    writeLatestGeneration(nextGeneration);
     setIsProjectMenuOpen(false);
 
     const persisted = await updateStoredGeneration({ starred });
@@ -724,7 +781,9 @@ export default function WorkspacePage() {
                   <Loader2 className="workspace-spin" size={15} />
                 </span>
                 <div className="workspace-message-content">
-                  <ActivityTimeline activeIndex={generationUpdateIndex} steps={generationUpdates} />
+                  <p className="workspace-ai-loading-text">
+                    {generationUpdates[generationUpdateIndex]?.label ?? "Working on your request..."}
+                  </p>
                   <MessageActions
                     messageRole="assistant"
                     onCopy={() => void copyChatMessage(generationUpdates[generationUpdateIndex]?.label ?? "Mosaic is working.")}
@@ -750,7 +809,11 @@ export default function WorkspacePage() {
 
             {referenceImage && (
               <div className="workspace-reference-chip">
-                <Paperclip size={14} />
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  src={`data:${referenceImage.mimeType};base64,${referenceImage.data}`}
+                />
                 <span>{referenceImage.name}</span>
                 <button aria-label="Remove reference image" onClick={() => setReferenceImage(null)} title="Remove reference image" type="button">
                   <X size={13} />
@@ -811,6 +874,15 @@ export default function WorkspacePage() {
               </div>
 
               <div className="workspace-composer-right">
+                <button
+                  aria-label="Attach reference image"
+                  className="workspace-attach-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach reference image"
+                  type="button"
+                >
+                  <Paperclip size={16} />
+                </button>
                 <div className="workspace-build-wrapper">
                   {isBuildMenuOpen && (
                     <div className="workspace-build-options" role="menu">
@@ -1035,38 +1107,6 @@ export default function WorkspacePage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function ActivityTimeline({ activeIndex, steps }: { activeIndex: number; steps: ActivityStep[] }) {
-  const visibleSteps = steps.slice(0, Math.min(steps.length, activeIndex + 1));
-
-  return (
-    <div className="workspace-activity-timeline" aria-live="polite">
-      <div className="workspace-activity-header">
-        <span>Mosaic activity</span>
-        <small>{steps[activeIndex]?.state.replace("_", " ") ?? "thinking"}</small>
-      </div>
-
-      <div className="workspace-activity-list">
-        {visibleSteps.map((step, index) => {
-          const isActive = index === activeIndex;
-          const isComplete = index < activeIndex || step.state === "completed";
-
-          return (
-            <div className={`workspace-activity-row${isActive ? " active" : ""}${isComplete ? " complete" : ""}`} key={`${step.state}-${step.label}`}>
-              <span className="workspace-activity-status" aria-hidden="true">
-                {isComplete ? <Check size={13} /> : <i />}
-              </span>
-              <span className="workspace-activity-copy">
-                <span className="workspace-activity-label">{step.label}</span>
-                <small>{step.state.replace("_", " ")}</small>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -1305,73 +1345,170 @@ function createLoadingGeneration(prompt: string): Generation {
   };
 }
 
-function createGenerationUpdates(prompt: string, referenceImage?: ReferenceImage | null) {
+function createGenerationUpdates(prompt: string, referenceImage?: ReferenceImage | null): ActivityStep[] {
   const lowerPrompt = prompt.toLowerCase();
   const subject = summarizePromptSubject(prompt);
-  const updates: ActivityStep[] = [
-    { state: "thinking", label: `Analyzing requirements for ${subject}...` },
-    ...(referenceImage
-      ? [{ state: "thinking" as const, label: `Studying ${referenceImage.name} for layout, spacing, colors, and visual details...` }]
-      : []),
-  ];
+  const steps: ActivityStep[] = [];
+  const isEdit = matchesPrompt(lowerPrompt, [
+    "change",
+    "rename",
+    "replace",
+    "update",
+    "make ",
+    "increase",
+    "decrease",
+    "remove",
+    "add",
+    "fix",
+    "adjust",
+  ]);
+
+  steps.push({ state: "thinking", label: isEdit ? `Reading your edit: ${truncateActivityLabel(prompt)}` : `Reading your request: ${truncateActivityLabel(prompt)}` });
+
+  if (referenceImage) {
+    steps.push({ state: "thinking", label: `Checking ${referenceImage.name} for visual guidance...` });
+  }
+
+  if (matchesPrompt(lowerPrompt, ["hello", "hi", "hey", "thanks", "thank you"])) {
+    return [
+      { state: "thinking", label: "Reading your message..." },
+      { state: "completed", label: "Ready to help." },
+    ];
+  }
+
+  if (matchesPrompt(lowerPrompt, ["rename", "brand", "logo text", "title", "name"])) {
+    steps.push(
+      { state: "planning", label: "Finding brand and title text in the current project..." },
+      { state: "editing_file", label: "Updating visible brand copy..." },
+      { state: "editing_file", label: "Updating matching React and preview markup..." },
+      { state: "fixing", label: "Checking navigation, headings, and metadata for consistency..." },
+      { state: "completed", label: "Brand update complete." },
+    );
+    return steps;
+  }
+
+  if (matchesPrompt(lowerPrompt, ["font", "text size", "typography", "bigger", "smaller", "bold", "weight"])) {
+    steps.push(
+      { state: "planning", label: "Locating typography styles affected by the request..." },
+      { state: "editing_file", label: "Adjusting text scale and hierarchy..." },
+      { state: "editing_file", label: "Updating Tailwind classes in the relevant components..." },
+      { state: "fixing", label: "Checking mobile and desktop readability..." },
+      { state: "completed", label: "Typography update complete." },
+    );
+    return steps;
+  }
+
+  if (matchesPrompt(lowerPrompt, ["color", "theme", "background", "gradient", "dark", "light"])) {
+    steps.push(
+      { state: "planning", label: "Identifying the affected color system..." },
+      { state: "editing_file", label: "Updating component colors and surfaces..." },
+      { state: "editing_file", label: "Syncing preview styles with the React output..." },
+      { state: "fixing", label: "Checking contrast and hover states..." },
+      { state: "completed", label: "Theme update complete." },
+    );
+    return steps;
+  }
+
+  if (matchesPrompt(lowerPrompt, ["responsive", "mobile", "tablet", "breakpoint", "overflow", "fit"])) {
+    steps.push(
+      { state: "planning", label: "Finding layout areas affected by responsiveness..." },
+      { state: "editing_file", label: "Adjusting responsive Tailwind breakpoints..." },
+      { state: "fixing", label: "Checking mobile spacing, wrapping, and overflow..." },
+      { state: "completed", label: "Responsive update complete." },
+    );
+    return steps;
+  }
+
+  if (isEdit) {
+    steps.push(
+      { state: "planning", label: "Locating the relevant existing components..." },
+      { state: "editing_file", label: "Applying the requested change..." },
+      { state: "editing_file", label: "Updating the live preview to match..." },
+      { state: "fixing", label: "Checking that unrelated sections stay unchanged..." },
+      { state: "completed", label: "Update complete." },
+    );
+    return steps;
+  }
 
   if (matchesPrompt(lowerPrompt, ["clone", "copy", "replica", "same as", "reference", "figma"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Mapping the reference into reusable React sections..." },
       { state: "planning", label: "Matching the strongest visual cues before writing the preview..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["dashboard", "admin", "analytics", "crm", "saas", "chart", "table"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Planning dashboard hierarchy, metrics, tables, and control states..." },
       { state: "fixing", label: "Balancing dense data areas with clear scanning patterns..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["landing", "homepage", "marketing", "hero", "startup", "agency"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Structuring the hero, conversion sections, and supporting proof points..." },
       { state: "fixing", label: "Tuning the page rhythm so the first screen feels polished..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["login", "signup", "sign up", "auth", "onboarding"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Designing the form flow, input states, and account actions..." },
       { state: "fixing", label: "Checking the layout for mobile-friendly authentication patterns..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["shop", "store", "ecommerce", "product", "cart", "checkout"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Arranging product cards, filters, pricing, and purchase actions..." },
       { state: "fixing", label: "Making the commerce flow feel clear and ready to browse..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["portfolio", "resume", "personal", "creator", "photographer"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Shaping portfolio sections around work, identity, and contact paths..." },
       { state: "fixing", label: "Giving the presentation enough polish without drowning the content..." },
     );
   } else if (matchesPrompt(lowerPrompt, ["mobile", "app", "ios", "android"])) {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Prioritizing compact mobile surfaces and thumb-friendly controls..." },
       { state: "fixing", label: "Checking spacing and component scale for smaller screens..." },
     );
   } else {
-    updates.push(
+    steps.push(
       { state: "planning", label: "Planning the main screens, components, and interaction states..." },
       { state: "planning", label: "Choosing a visual system that fits the product idea..." },
     );
   }
 
-  updates.push(
+  steps.push(
     { state: "generating", label: "Creating React components..." },
     { state: "editing_file", label: "Editing src/App.jsx..." },
-    { state: "editing_file", label: "Editing src/components/Navbar.jsx..." },
     { state: "editing_file", label: "Generating Tailwind styles..." },
     { state: "fixing", label: "Fixing responsive layout..." },
     { state: "fixing", label: `Polishing ${subject} before the preview updates...` },
     { state: "completed", label: "Build complete." },
   );
 
-  return updates;
+  return steps;
 }
 
 function matchesPrompt(prompt: string, terms: string[]) {
   return terms.some((term) => prompt.includes(term));
+}
+
+function getConversationalReply(prompt: string) {
+  const normalized = prompt.toLowerCase().trim().replace(/[.!?]+$/g, "");
+
+  if (["hi", "hello", "hey", "yo", "sup"].includes(normalized)) {
+    return "Hey. Tell me what you want to build or what you want changed in the current project.";
+  }
+
+  if (["thanks", "thank you", "ty"].includes(normalized)) {
+    return "You're welcome. Send me the next change whenever you're ready.";
+  }
+
+  if (normalized === "help") {
+    return "I can generate a new React/Tailwind project or edit the current one. For example: “make the hero headline larger”, “rename the brand to Vishal”, or “make the cards responsive on mobile.”";
+  }
+
+  return null;
+}
+
+function truncateActivityLabel(value: string) {
+  const cleanValue = value.replace(/\s+/g, " ").trim();
+  return cleanValue.length > 72 ? `${cleanValue.slice(0, 69)}...` : cleanValue;
 }
 
 function summarizePromptSubject(prompt: string) {
@@ -1405,6 +1542,7 @@ function createGenerationContext(generation: Generation): GenerationContext | un
   }
 
   return {
+    id: generation.id,
     title: generation.title,
     summary: generation.summary,
     prompt: generation.prompt,
@@ -1654,6 +1792,11 @@ function readSessionJson<T>(key: string) {
     window.sessionStorage.removeItem(key);
     return null;
   }
+}
+
+function getUserStorageKey(kind: "pendingGeneration" | "latestGeneration", user?: { id?: string | null; email?: string | null }) {
+  const owner = user?.id || user?.email?.toLowerCase() || "anonymous";
+  return `mosaic.${owner}.${kind}`;
 }
 
 function readReferenceImage(file: File): Promise<ReferenceImage> {

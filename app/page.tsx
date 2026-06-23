@@ -19,7 +19,7 @@ const gradientImages = [
   "https://framerusercontent.com/images/2JQhaxBHmW5sc4O8xOEtc5ogk.png",
 ];
 
-const navItems = ["About", "Workflow", "FAQs", "Contact", "Generate"];
+const navItems = ["About", "FAQs", "Contact", "Generate"];
 
 const coreCards = [
   {
@@ -119,7 +119,7 @@ const manifestoLines = [
 
 function Logo() {
   return (
-    <a className="brand" href="#">
+    <a className="brand home-brand" href="#">
       <span className="brand-mark" aria-hidden="true" />
       <span>Mosaic</span>
     </a>
@@ -320,7 +320,6 @@ export default function Home() {
           <div className="actions">
             <Button href="/signup" onClick={() => setAuthMode("signup")}>Get started</Button>
             <Button href="/login" onClick={() => setAuthMode("login")} variant="ghost">Sign in</Button>
-            <Button href="/signup" onClick={() => setAuthMode("signup")} variant="ghost">Next Page</Button>
           </div>
         </div>
       </section>
@@ -523,7 +522,7 @@ export default function Home() {
       />  
 
       <h3>Diya Bajoria</h3>
-      <p>Frontend Developer & Designer</p>
+      <p>Shoe Chef</p>
 
       <div className="developer-links">
         <a
@@ -545,13 +544,13 @@ export default function Home() {
 
     <div className="developer-card">
       <img
-        src="/images/prego_vishal.jpg"
+        src="/images/vishal-vaibhav-profile.jpeg"
         alt="Vishal"
         className="developer-avatar"
       />
 
       <h3>Vishal Vaibhav</h3>
-      <p>Shy Backend Developer</p>
+      <p>Chief Chef</p>
 
       <div className="developer-links">
         <a

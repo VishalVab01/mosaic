@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -17,6 +18,7 @@ const requestSchema = z.object({
     .optional(),
   currentGeneration: z
     .object({
+      id: z.string().optional(),
       title: z.string().optional(),
       summary: z.string().optional(),
       prompt: z.string().optional(),
@@ -53,6 +55,7 @@ const generationSchema = z.object({
 });
 
 const fallbackModels = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+const maxGeminiAttemptsPerModel = 2;
 
 type GeminiResponse = {
   candidates?: Array<{
@@ -113,19 +116,39 @@ export async function POST(request: Request) {
     });
 
     const now = new Date();
-    const saved = await db.collection("generations").insertOne({
+    const generationRecord = {
       ...result,
       prompt: parsed.data.prompt,
       figmaLink: parsed.data.figmaLink,
       referenceImageName: parsed.data.referenceImage?.name,
       userId: creditReservation.userId,
       generatedAt: now,
-      createdAt: now,
-    });
+      updatedAt: now,
+    };
+    const currentGenerationId = parsed.data.currentGeneration?.id;
+    let generationId = "";
+
+    if (currentGenerationId && ObjectId.isValid(currentGenerationId)) {
+      const updated = await db.collection("generations").findOneAndUpdate(
+        { _id: new ObjectId(currentGenerationId), userId: creditReservation.userId },
+        { $set: generationRecord },
+        { returnDocument: "after", projection: { _id: 1 } },
+      );
+
+      generationId = updated.value?._id.toString() ?? "";
+    }
+
+    if (!generationId) {
+      const saved = await db.collection("generations").insertOne({
+        ...generationRecord,
+        createdAt: now,
+      });
+      generationId = saved.insertedId.toString();
+    }
 
     return NextResponse.json({
       generation: result,
-      generationId: saved.insertedId.toString(),
+      generationId,
       creditsRemaining: creditReservation.credits,
       creditLimit: FREE_SIGNUP_CREDITS,
     });
@@ -157,30 +180,43 @@ async function generateWithGemini({
   const errors: string[] = [];
 
   for (const model of models) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-    });
+    for (let attempt = 1; attempt <= maxGeminiAttemptsPerModel; attempt += 1) {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const data = (await response.json().catch(() => null)) as GeminiResponse | null;
+      const data = (await response.json().catch(() => null)) as GeminiResponse | null;
 
-    if (!response.ok) {
-      errors.push(data?.error?.message ?? `${model} returned ${response.status}`);
-      continue;
+      if (!response.ok) {
+        const message = data?.error?.message ?? `${model} returned ${response.status}`;
+        errors.push(`${model}: ${message}`);
+
+        if (attempt < maxGeminiAttemptsPerModel && isTemporaryGeminiError(response.status, message)) {
+          await wait(900 * attempt);
+          continue;
+        }
+
+        break;
+      }
+
+      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n").trim();
+
+      if (!text) {
+        errors.push(`${model}: returned an empty response`);
+        break;
+      }
+
+      return parseGeneration(text);
     }
+  }
 
-    const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n").trim();
-
-    if (!text) {
-      errors.push(`${model} returned an empty response`);
-      continue;
-    }
-
-    return parseGeneration(text);
+  if (errors.some((error) => isTemporaryGeminiError(undefined, error))) {
+    throw new Error("Gemini is temporarily overloaded. I tried the available fallback models, but they are busy right now. Please run it again in a minute.");
   }
 
   throw new Error(errors[0] ?? "Gemini did not return a usable generation.");
@@ -197,10 +233,12 @@ function createGeminiPayload({
   referenceImage?: { data: string; mimeType: string; name: string };
   currentGeneration?: z.infer<typeof requestSchema>["currentGeneration"];
 }) {
+  const cloneGuidance = getCloneGuidance(prompt);
   const currentProjectContext = currentGeneration
     ? [
         "",
         "Existing project context for a follow-up edit:",
+        `Current id: ${currentGeneration.id ?? "none"}`,
         `Current title: ${currentGeneration.title ?? "Untitled"}`,
         `Original/previous prompt: ${currentGeneration.prompt ?? "none"}`,
         `Current summary: ${currentGeneration.summary ?? "none"}`,
@@ -218,7 +256,7 @@ function createGeminiPayload({
 
   return {
     generationConfig: {
-      temperature: 0.55,
+      temperature: 0.35,
       topP: 0.9,
       responseMimeType: "application/json",
     },
@@ -233,6 +271,10 @@ function createGeminiPayload({
               "Return ONLY valid JSON with this shape:",
               '{"title":"string","summary":"string","previewHtml":"string","previewCss":"string","previewJs":"string","files":[{"path":"string","content":"string"}],"notes":["string"]}',
               "First infer the product type, target audience, and primary user action. Then build a complete, realistic React + Tailwind website, app screen, dashboard, landing page, or mini-flow based on the user request.",
+              "Respect the user's requested product identity. Do not rebrand requested products as Mosaic, MosaicTube, MonoAI, or any other house brand unless the user explicitly asks for that.",
+              "If the user asks for a clone, remake the recognizable product pattern as closely as possible within React/Tailwind: layout, navigation, spacing, colors, page density, content types, and core interactions should match the referenced product.",
+              "For well-known product clone requests, keep the requested product name in visible UI copy when the user uses that name. Example: a YouTube clone should look like YouTube, say YouTube where appropriate, use video feed/sidebar/top search/player patterns, and should not become MosaicTube.",
+              "Do not make a shallow or tiny mockup. For clone requests, include enough visible real estate and realistic repeated content to feel like the actual app: sidebars, top bars, cards/lists, filters/tabs, empty/loading states, and responsive mobile behavior.",
               "The files array must represent a proper Vite React project folder structure.",
               "Always include at least these files: package.json, index.html, src/main.jsx, src/App.jsx, src/index.css, tailwind.config.js, postcss.config.js, README.md.",
               "If the app naturally has multiple pages or major views, implement real in-app navigation in src/App.jsx using route state or hash navigation, and include matching links in previewHtml with href values like /, #pricing, #settings, or #dashboard.",
@@ -250,6 +292,7 @@ function createGeminiPayload({
               "Use realistic mock content and domain-specific details instead of lorem ipsum.",
               "Write reusable React components with clean names and minimal duplication. Separate major sections into components when appropriate.",
               "Do not use remote images, iframes, backend calls, or paid libraries. Use local gradients, SVG, CSS, and realistic placeholder data.",
+              "Never output broken image placeholders. If a thumbnail, avatar, logo, or media image is needed, create it with CSS gradients, inline SVG, emoji-free lettermarks, or data-safe markup instead of <img src> values that may fail.",
               "previewHtml/previewCss/previewJs must be a self-contained static preview of the generated app for an iframe. It should visually match the React output.",
               "CRITICAL PREVIEW RULES: previewHtml must contain visible body markup, not an empty #root element, not JSX, and not a full HTML document. Do not include html/head/body/style/script tags in previewHtml.",
               "previewCss must be ordinary browser CSS without @tailwind directives or style tags. previewJs must be plain browser JavaScript without imports, exports, JSX, TypeScript, or script tags.",
@@ -257,6 +300,7 @@ function createGeminiPayload({
               "The generated React code should be clean, componentized when useful, accessible, responsive, and ready to run with npm install && npm run dev.",
               "Before returning JSON, self-review spacing, typography hierarchy, responsiveness, visual polish, accessibility, and whether any section feels generic. Upgrade weak sections until the result feels production-ready for paying customers.",
               "For follow-up edit requests like changing font size, colors, spacing, copy, sections, responsiveness, or component behavior, update the existing project directly and keep everything else stable.",
+              cloneGuidance,
               "Avoid markdown fences. Avoid explanations outside JSON.",
               currentProjectContext,
               "",
@@ -302,6 +346,29 @@ function parseGeneration(text: string) {
   return parsed.data;
 }
 
+function getCloneGuidance(prompt: string) {
+  const normalizedPrompt = prompt.toLowerCase();
+
+  if (!normalizedPrompt.includes("clone")) {
+    return "";
+  }
+
+  if (normalizedPrompt.includes("youtube")) {
+    return [
+      "Specific YouTube clone requirements:",
+      "- Build a faithful YouTube-style UI, not a renamed alternative brand.",
+      "- Visible brand should be YouTube unless the user asks for a different name.",
+      "- Include a sticky top bar with menu, YouTube wordmark area, centered search, voice/action icons, and user avatar.",
+      "- Include a left navigation rail/sidebar with Home, Shorts, Subscriptions, Library/History-style items.",
+      "- Include category chips, a dense responsive video grid, thumbnail blocks, durations, channel avatars, titles, channel names, views, and upload age.",
+      "- Use dark or light YouTube-like surfaces intentionally, with strong contrast and no broken image icons.",
+      "- On mobile, collapse the sidebar and keep the feed/search experience usable.",
+    ].join("\n");
+  }
+
+  return "Clone request requirement: preserve the recognizable identity and interaction pattern of the requested product instead of inventing a generic renamed version.";
+}
+
 function serializeFilesForPrompt(files: Array<{ path: string; content: string }>) {
   const importantFiles = files
     .filter((file) =>
@@ -333,4 +400,24 @@ function truncateForPrompt(value: string, maxLength: number) {
   }
 
   return `${value.slice(0, maxLength)}\n...[truncated]`;
+}
+
+function isTemporaryGeminiError(status: number | undefined, message: string) {
+  const lowerMessage = message.toLowerCase();
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    lowerMessage.includes("high demand") ||
+    lowerMessage.includes("overloaded") ||
+    lowerMessage.includes("temporarily") ||
+    lowerMessage.includes("try again later") ||
+    lowerMessage.includes("unavailable")
+  );
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

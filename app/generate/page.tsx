@@ -41,10 +41,6 @@ export default function GeneratePage() {
     </Suspense>
   );
 }
-const sacramento = Sacramento({
-  subsets: ["latin"],
-  weight: "400",
-});
 const prompts = [
   "Ask MOSAIC to build a modern SaaS dashboard...",
   "Ask MOSAIC to create a portfolio website for a developer...",
@@ -52,6 +48,10 @@ const prompts = [
   "Ask MOSAIC to generate an e-commerce store for a fashion brand...",
 ];
 const DEFAULT_CREDIT_LIMIT = 10;
+const sacramento = Sacramento({
+  subsets: ["latin"],
+  weight: "400",
+});
 
 function GenerateExperience() {
   const router = useRouter();
@@ -59,17 +59,18 @@ function GenerateExperience() {
   const { data: session } = useSession();
   const [figmaLink, setFigmaLink] = useState("");
   const [fileName, setFileName] = useState("");
+  const [filePreview, setFilePreview] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFigmaImportMode, setIsFigmaImportMode] = useState(false);
   const suggestions = [
-    "Loyalty punch card for a coffee shop",
-    "Digital menu for a coffee shop",
-    "Wholesale order form for an indie food brand",
-    "CRM for a salon",
-    "Inventory tracker for a jewelry store",
+    "SaaS dashboard with charts",
+    "Responsive landing page",
+    "AI chat interface",
+    "Pricing page with cards",
+    "Mobile app onboarding flow",
   ];
 
 
@@ -84,6 +85,8 @@ const [promptIndex, setPromptIndex] = useState(0);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const userInitial = session?.user?.name?.trim().charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || "M";
   const userImage = imageFailed ? null : session?.user?.image;
+  const pendingGenerationKey = getUserStorageKey("pendingGeneration", session?.user);
+  const latestGenerationKey = getUserStorageKey("latestGeneration", session?.user);
   const creditsRemaining = credits ?? creditLimit;
   const creditsUsed = Math.max(0, creditLimit - creditsRemaining);
   const usagePercent = Math.min(100, Math.round((creditsUsed / creditLimit) * 100));
@@ -130,6 +133,14 @@ const [promptIndex, setPromptIndex] = useState(0);
     const timer = window.setTimeout(() => setSuccessMessage(""), 4200);
     return () => window.clearTimeout(timer);
   }, [successMessage]);
+
+  useEffect(() => {
+    return () => {
+      if (filePreview) {
+        URL.revokeObjectURL(filePreview);
+      }
+    };
+  }, [filePreview]);
 
   useEffect(() => {
     let isMounted = true;
@@ -194,13 +205,14 @@ const [promptIndex, setPromptIndex] = useState(0);
       : prompt;
 
     window.sessionStorage.setItem(
-      "mosaic.pendingGeneration",
+      pendingGenerationKey,
       JSON.stringify({
         figmaLink: isFigmaLink ? prompt : undefined,
         prompt: generationPrompt,
         requestedAt: new Date().toISOString(),
       }),
     );
+    window.sessionStorage.removeItem("mosaic.pendingGeneration");
     router.push("/workspace");
   }
 
@@ -212,9 +224,39 @@ const [promptIndex, setPromptIndex] = useState(0);
     requestAnimationFrame(() => promptInputRef.current?.focus());
   }
 
+  function handleReferenceFile(file: File | undefined) {
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+
+    if (!file) {
+      setFileName("");
+      setFilePreview("");
+      return;
+    }
+
+    setFileName(file.name);
+    setFilePreview(URL.createObjectURL(file));
+  }
+
+  function removeReferenceFile() {
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+
+    setFileName("");
+    setFilePreview("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
   function openRecentGeneration(generation: RecentGeneration) {
+    window.sessionStorage.removeItem(pendingGenerationKey);
     window.sessionStorage.removeItem("mosaic.pendingGeneration");
-    window.sessionStorage.setItem("mosaic.latestGeneration", JSON.stringify(generation));
+    window.sessionStorage.setItem(latestGenerationKey, JSON.stringify(generation));
+    window.sessionStorage.removeItem("mosaic.latestGeneration");
     router.push("/workspace");
   }
 
@@ -358,7 +400,7 @@ const [promptIndex, setPromptIndex] = useState(0);
       <section className="generate-hero">
         <div className="generate-copy">
           <h1>
-            Turn your <span className={sacramento.className}>Figma</span> designs into production-ready code.
+            Turn your <FigmaWordmark className={sacramento.className} /> designs into production-ready code.
           </h1>
           <p>
             Paste your Figma link, optionally attach reference images, and generate your application instantly.
@@ -389,9 +431,7 @@ const [promptIndex, setPromptIndex] = useState(0);
             type="file"
             accept="image/*"
             hidden
-            onChange={(event) =>
-              setFileName(event.target.files?.[0]?.name ?? "")
-            }
+            onChange={(event) => handleReferenceFile(event.target.files?.[0])}
           />
 
           <div className="generate-toolbar-left">
@@ -436,6 +476,16 @@ const [promptIndex, setPromptIndex] = useState(0);
         </button>
         </div>
 
+        {filePreview && (
+          <div className="generate-reference-chip">
+            <img alt="" aria-hidden="true" src={filePreview} />
+            <span>{fileName}</span>
+            <button aria-label="Remove reference image" onClick={removeReferenceFile} title="Remove reference image" type="button">
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         {generationError && (
           <p className="generate-error-message">
             {generationError}
@@ -468,4 +518,34 @@ const [promptIndex, setPromptIndex] = useState(0);
       </section>
     </main>
   );
+}
+
+function FigmaWordmark({ className }: { className: string }) {
+  return (
+    <svg
+      aria-label="Figma"
+      className="figma-handwriting-logo"
+      role="img"
+      viewBox="0 0 320 118"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="figma-word-gradient" x1="18" x2="302" y1="18" y2="96" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#9460EA" />
+          <stop offset="1" stopColor="#68B5F3" />
+        </linearGradient>
+      </defs>
+      <text className={`figma-handwriting-stroke ${className}`} x="14" y="84">
+        Figma
+      </text>
+      <text className={`figma-handwriting-fill ${className}`} x="14" y="84">
+        Figma
+      </text>
+    </svg>
+  );
+}
+
+function getUserStorageKey(kind: "pendingGeneration" | "latestGeneration", user?: { id?: string | null; email?: string | null }) {
+  const owner = user?.id || user?.email?.toLowerCase() || "anonymous";
+  return `mosaic.${owner}.${kind}`;
 }
