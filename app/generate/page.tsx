@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { Sacramento } from "next/font/google";
+import ExitToAppRoundedIcon from "@mui/icons-material/ExitToAppRounded";
 import {
   CheckCircle2,
   Clapperboard,
@@ -28,6 +30,16 @@ export default function GeneratePage() {
     </Suspense>
   );
 }
+const sacramento = Sacramento({
+  subsets: ["latin"],
+  weight: "400",
+});
+const prompts = [
+  "Ask MOSAIC to build a modern SaaS dashboard...",
+  "Ask MOSAIC to create a portfolio website for a developer...",
+  "Ask MOSAIC to design a food delivery app with live tracking...",
+  "Ask MOSAIC to generate an e-commerce store for a fashion brand...",
+];
 
 function GenerateExperience() {
   const router = useRouter();
@@ -39,6 +51,18 @@ function GenerateExperience() {
   const [successMessage, setSuccessMessage] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const suggestions = [
+    "Loyalty punch card for a coffee shop",
+    "Digital menu for a coffee shop",
+    "Wholesale order form for an indie food brand",
+    "CRM for a salon",
+    "Inventory tracker for a jewelry store",
+  ];
+
+
+const [placeholder, setPlaceholder] = useState("");
+const [promptIndex, setPromptIndex] = useState(0);
+  
   const [imageFailed, setImageFailed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const userInitial = session?.user?.name?.trim().charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || "M";
@@ -60,6 +84,29 @@ function GenerateExperience() {
       icon: ShoppingBag,
     },
   ];
+
+  useEffect(() => {
+  if (figmaLink) return;
+
+  const text = prompts[promptIndex];
+  let i = 0;
+
+  const typing = setInterval(() => {
+    setPlaceholder(text.slice(0, i + 1));
+    i++;
+
+    if (i === text.length) {
+      clearInterval(typing);
+
+      setTimeout(() => {
+        setPromptIndex((prev) => (prev + 1) % prompts.length);
+        setPlaceholder("");
+      }, 2000);
+    }
+  }, 45);
+
+  return () => clearInterval(typing);
+}, [promptIndex, figmaLink]);
 
   useEffect(() => {
     const authStatus = searchParams.get("auth");
@@ -228,45 +275,90 @@ function GenerateExperience() {
 
       <section className="generate-hero">
         <div className="generate-copy">
-          <h1>Turn your Figma designs into production-ready code.</h1>
+          <h1>
+            Turn your <span className={sacramento.className}>Figma</span> designs into production-ready code.
+          </h1>
           <p>
             Paste your Figma link, optionally attach reference images, and generate your application instantly.
           </p>
         </div>
 
-        <div className="generate-composer">
+      <div className="generate-composer">
+        <div className="generate-textarea-wrapper">
+          {!figmaLink && (
+            <div className="animated-placeholder">
+              {placeholder}
+              <span className="caret" />
+            </div>
+          )}
+
           <textarea
             aria-label="Figma file URL"
             rows={2}
-            placeholder="Paste your Figma file URL here..."
             value={figmaLink}
-            onChange={(event) => setFigmaLink(event.target.value)}
+            onChange={(e) => setFigmaLink(e.target.value)}
+          />
+        </div>
+
+        <div className="generate-toolbar">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) =>
+              setFileName(event.target.files?.[0]?.name ?? "")
+            }
           />
 
-          <div className="generate-toolbar">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
-            />
-            <button
-              aria-label={fileName ? `Attached ${fileName}` : "Attach reference image"}
-              className="generate-attach-button"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip size={24} />
-            </button>
+          <button
+            aria-label={
+              fileName
+                ? `Attached ${fileName}`
+                : "Attach reference image"
+            }
+            className="generate-attach-button"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip size={24} />
+          </button>
 
-            <button className="generate-run-button" onClick={handleGenerate} type="button">
-              Run
-            </button>
-          </div>
-
-          {generationError && <p className="generate-error-message">{generationError}</p>}
+        <button
+          className="generate-run-button"
+          onClick={handleGenerate}
+          type="button"
+        >
+          <ExitToAppRoundedIcon fontSize="small" />
+        </button>
         </div>
+
+        {generationError && (
+          <p className="generate-error-message">
+            {generationError}
+          </p>
+        )}
+      </div>
+
+      <div className="generate-suggestions">
+        <p className="generate-suggestions-title">
+          Not sure where to start? Try these
+        </p>
+
+        <div className="generate-suggestions-grid">
+          {suggestions.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="generate-suggestion-chip"
+              onClick={() => setFigmaLink(item)}
+            >
+              <span className="generate-chip-dot" />
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
       </section>
     </main>
   );

@@ -451,3 +451,114 @@
     width: 40px;
   }
 }
+:root {
+  --figma-red: #E45C34;
+  --figma-peach: #EA7A67;
+  --figma-purple: #9460EA;
+  --figma-blue: #68B5F3;
+  --figma-green: #67D297;
+  --figma-bg: #981F5A;
+}
+.cursive {
+  font-style: italic;
+  letter-spacing: -0.03em;
+}
+.generate-copy h1 span {
+  font-size: 1.35em;
+  line-height: 1;
+  background: linear-gradient(90deg, #9460EA, #68B5F3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.generate-textarea-wrapper {
+  position: relative;
+}
+
+.animated-placeholder {
+  position: absolute;
+  top: 0;
+  left: 2px;
+
+  pointer-events: none;
+  user-select: none;
+
+  color: rgba(255, 255, 255, 0.28);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  vertical-align: middle;
+
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.generate-suggestions {
+  margin-top: 32px;
+  max-width: 1050px;
+  width: 100%;
+}
+
+.generate-suggestions-title {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.generate-suggestions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.generate-suggestion-chip {
+  align-items: center;
+  background: #101012;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 12px;
+  padding: 14px 22px;
+  font: inherit;
+  font-size: 16px;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.generate-suggestion-chip:hover {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-2px);
+}
+
+.generate-chip-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    #67d297,
+    #68b5f3,
+    #9460ea,
+    #ea7a67
+  );
+  flex-shrink: 0;
+}
