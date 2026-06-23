@@ -545,13 +545,13 @@ export default function Home() {
 
     <div className="developer-card">
       <img
-        src="/vishal.jpg"
+        src="/images/prego_vishal.jpg"
         alt="Vishal"
         className="developer-avatar"
       />
 
       <h3>Vishal</h3>
-      <p>Backend Developer</p>
+      <p>Shy Backend Developer</p>
 
       <div className="developer-links">
         <a
