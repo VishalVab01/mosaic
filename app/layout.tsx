@@ -6,6 +6,11 @@ import Providers from "./providers";
 export const metadata: Metadata = {
   title: "Mosaic",
   description: "Mosaic converts Figma designs and natural-language prompts into production-ready frontend code.",
+  icons: {
+    icon: "/images/mosaic-mark-transparent.png",
+    shortcut: "/images/mosaic-mark-transparent.png",
+    apple: "/images/mosaic-mark-transparent.png",
+  },
 };
 
 export default function RootLayout({
