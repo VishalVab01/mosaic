@@ -167,10 +167,6 @@ export async function POST(request: Request) {
   const provider = getAiProvider();
   const apiKey = provider === "openrouter" ? process.env.OPENROUTER_API_KEY : process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return NextResponse.json({ error: `${provider === "openrouter" ? "OpenRouter" : "Gemini"} API key is not configured.` }, { status: 500 });
-  }
-
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
 
@@ -195,22 +191,35 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = enforceGenerationQuality(
-      parsed.data.prompt,
-      await generateWithAi({
-        provider,
-        apiKey,
-        figmaLink: parsed.data.figmaLink,
-        prompt: parsed.data.prompt,
-        referenceImage: parsed.data.referenceImage,
-        currentGeneration: parsed.data.currentGeneration,
-      }),
-    );
+    let result: z.infer<typeof generationSchema>;
 
-    const qualityIssues = validateGeneratedQuality(parsed.data.prompt, result);
+    if (!apiKey) {
+      console.warn(`[Mosaic generation] ${provider} API key is not configured; using local reliable generation.`);
+      result = createReliableGeneration(parsed.data.prompt, "AI provider key missing");
+    } else {
+      try {
+        result = enforceGenerationQuality(
+          parsed.data.prompt,
+          await generateWithAi({
+            provider,
+            apiKey,
+            figmaLink: parsed.data.figmaLink,
+            prompt: parsed.data.prompt,
+            referenceImage: parsed.data.referenceImage,
+            currentGeneration: parsed.data.currentGeneration,
+          }),
+        );
 
-    if (qualityIssues.length) {
-      console.warn(`[Mosaic generation] generated UI quality warnings: ${qualityIssues.join("; ")}`);
+        const qualityIssues = validateGeneratedQuality(parsed.data.prompt, result);
+
+        if (qualityIssues.length) {
+          console.warn(`[Mosaic generation] generated UI quality warnings: ${qualityIssues.join("; ")}; using local reliable generation.`);
+          result = createReliableGeneration(parsed.data.prompt, qualityIssues.join("; "));
+        }
+      } catch (error) {
+        console.warn(`[Mosaic generation] AI provider failed; using local reliable generation: ${error instanceof Error ? error.message : "Unknown error."}`);
+        result = createReliableGeneration(parsed.data.prompt, error instanceof Error ? error.message : "AI provider failed");
+      }
     }
 
     const now = new Date();
@@ -312,6 +321,395 @@ function validateGeneratedQuality(prompt: string, generation: z.infer<typeof gen
   if (generation.previewHtml.length < 4500 || generation.previewCss.length < 2200) issues.push("preview is too small/basic");
 
   return issues;
+}
+
+function createReliableGeneration(prompt: string, reason: string): z.infer<typeof generationSchema> {
+  const analysis = analyzePrompt(prompt);
+  const title = getFallbackTitle(prompt, analysis.websiteType);
+  const theme = getFallbackTheme(analysis.websiteType);
+  const sections = getReliableSections(prompt, analysis.websiteType);
+  const previewHtml = renderReliablePreview({ title, prompt, sections, theme, websiteType: analysis.websiteType });
+  const previewCss = renderReliableCss(theme);
+  const appFile = renderReliableApp({ title, prompt, sections, theme, websiteType: analysis.websiteType });
+
+  return {
+    title,
+    summary: `A polished ${analysis.websiteType.replace(/-/g, " ")} generated for: ${prompt}.`,
+    previewHtml,
+    previewCss,
+    previewJs: "",
+    files: createReliableFiles(appFile, title),
+    notes: [`Used reliable local generation because ${reason}.`],
+  };
+}
+
+type ReliableSection = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: Array<{ title: string; meta: string; description: string }>;
+};
+
+type ReliableTheme = {
+  background: string;
+  surface: string;
+  surfaceAlt: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentSoft: string;
+  border: string;
+};
+
+function getFallbackTitle(prompt: string, websiteType: WebsiteType) {
+  const clean = prompt
+    .replace(/\b(build|make|create|design|generate|please|a|an|the|website|site|app|page|clone|for|me)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/youtube|video/i.test(prompt)) return "YouTube";
+  if (/twitter|x clone|tweet/i.test(prompt)) return "Pulse";
+  if (/facebook/i.test(prompt)) return "Connect";
+  if (/ecommerce|shop|store|product/i.test(prompt)) return "Nova Store";
+  if (/dashboard|analytics|admin/i.test(prompt)) return "Mosaic Analytics";
+  if (/cafe|coffee|restaurant/i.test(prompt)) return "Lumen Cafe";
+  if (/portfolio/i.test(prompt)) return "Studio Portfolio";
+
+  return clean ? toTitleCase(clean).slice(0, 42) : toTitleCase(websiteType.replace(/-/g, " "));
+}
+
+function getFallbackTheme(websiteType: WebsiteType): ReliableTheme {
+  if (websiteType === "fashion-ecommerce" || websiteType === "restaurant-cafe") {
+    return {
+      background: "#f8f3ec",
+      surface: "rgba(255,255,255,.72)",
+      surfaceAlt: "#1f1712",
+      text: "#211a16",
+      muted: "#77685d",
+      accent: "#a15c38",
+      accentSoft: "rgba(161,92,56,.14)",
+      border: "rgba(33,26,22,.12)",
+    };
+  }
+
+  return {
+    background: "#09090b",
+    surface: "rgba(255,255,255,.075)",
+    surfaceAlt: "rgba(255,255,255,.11)",
+    text: "#f8fafc",
+    muted: "#a1a1aa",
+    accent: "#38bdf8",
+    accentSoft: "rgba(56,189,248,.14)",
+    border: "rgba(255,255,255,.12)",
+  };
+}
+
+function getReliableSections(prompt: string, websiteType: WebsiteType): ReliableSection[] {
+  if (websiteType === "social-feed") {
+    return [
+      {
+        eyebrow: "Live timeline",
+        title: "A social feed that feels active from the first screen",
+        description: "Post composer, trending topics, creator suggestions, and a dense responsive timeline.",
+        items: [
+          { title: "Ava Patel", meta: "@ava_builds · 4m · 12K views", description: "Shipping a cleaner creator dashboard today. The best products make complicated workflows feel calm." },
+          { title: "Mosaic Studio", meta: "@mosaic · 12m · 8.4K views", description: "New release: faster previews, richer generated layouts, and smarter responsive behavior." },
+          { title: "Ryan Chen", meta: "@ryanchendesign · 31m · 19K views", description: "Tiny details that make a feed feel real: hover states, timestamps, soft dividers, and good empty states." },
+          { title: "Nora Labs", meta: "@noralabs · 1h · 24K views", description: "We rebuilt onboarding around one question: what does the user need to do next?" },
+        ],
+      },
+      {
+        eyebrow: "Trending now",
+        title: "Topics people are talking about",
+        description: "Relevant trends, follow suggestions, and engagement metrics fill the side panel.",
+        items: [
+          { title: "#BuildInPublic", meta: "18.2K posts", description: "Founders sharing launches, metrics, and product notes." },
+          { title: "AI design systems", meta: "7,920 posts", description: "Teams comparing prompts, components, and generation quality." },
+          { title: "Frontend Friday", meta: "4,108 posts", description: "New interfaces, UI experiments, and code snippets." },
+        ],
+      },
+    ];
+  }
+
+  if (websiteType === "video-platform-dashboard") {
+    return [
+      {
+        eyebrow: "Watch next",
+        title: "A dense video home feed with search, chips, and creator metadata",
+        description: "A YouTube-style browsing interface with a sidebar, sticky controls, and responsive video cards.",
+        items: [
+          { title: "Building a cinematic desk setup", meta: "Studio Desk · 1.2M views · 3 days ago", description: "12:48" },
+          { title: "React workflow I use every day", meta: "Frontend Lab · 486K views · 1 week ago", description: "24:10" },
+          { title: "AI tools that actually save time", meta: "Ops Weekly · 137K views · 2 days ago", description: "15:09" },
+          { title: "Designing thumbnails that people click", meta: "Northline Films · 604K views · 4 days ago", description: "9:41" },
+          { title: "Live coding a SaaS dashboard", meta: "Code Room · 318K views · 2 days ago", description: "31:08" },
+          { title: "Creator economy tools nobody mentions", meta: "Signal Media · 92K views · 18 hours ago", description: "18:32" },
+        ],
+      },
+    ];
+  }
+
+  if (websiteType === "admin-dashboard") {
+    return [
+      {
+        eyebrow: "Overview",
+        title: "Metrics, charts, activity, and customer data in one view",
+        description: "A polished operational dashboard with real stats and dense data sections.",
+        items: [
+          { title: "$128.4K", meta: "Revenue · +18.2%", description: "Monthly recurring revenue across paid workspaces." },
+          { title: "24,892", meta: "Active users · +9.7%", description: "Teams who opened projects this week." },
+          { title: "97.8%", meta: "Uptime · stable", description: "Preview generation availability over the last 30 days." },
+          { title: "1,284", meta: "New projects", description: "Fresh generations created this month." },
+        ],
+      },
+      {
+        eyebrow: "Recent activity",
+        title: "Latest workspace events",
+        description: "Generated projects, upgraded accounts, and project exports.",
+        items: [
+          { title: "Acme Studio", meta: "Generated ecommerce storefront", description: "2 minutes ago" },
+          { title: "Northstar", meta: "Exported React project ZIP", description: "18 minutes ago" },
+          { title: "Orbit Labs", meta: "Updated dashboard color system", description: "41 minutes ago" },
+        ],
+      },
+    ];
+  }
+
+  if (websiteType === "fashion-ecommerce" || /shop|store|ecommerce|product/i.test(prompt)) {
+    return [
+      {
+        eyebrow: "Featured collection",
+        title: "Products made for modern living",
+        description: "A premium storefront with category chips, product cards, trust cues, testimonials, and FAQ.",
+        items: [
+          { title: "Linen Utility Jacket", meta: "$148 · 4.9 rating", description: "Structured midweight layer with soft brushed lining." },
+          { title: "Everyday Travel Tote", meta: "$96 · Bestseller", description: "Roomy carryall with laptop sleeve and magnetic closure." },
+          { title: "Cloud Knit Set", meta: "$128 · New", description: "Relaxed two-piece set with a refined lounge silhouette." },
+          { title: "Ceramic Desk Lamp", meta: "$74 · Limited", description: "Warm diffused lighting for workspaces and bedrooms." },
+        ],
+      },
+      {
+        eyebrow: "Why customers return",
+        title: "A store experience built around trust",
+        description: "Fast shipping, easy returns, curated bundles, and polished merchandising.",
+        items: [
+          { title: "Free 3-day shipping", meta: "Orders over $75", description: "Tracked delivery with proactive updates." },
+          { title: "30-day returns", meta: "No stress", description: "Simple exchanges and instant return labels." },
+          { title: "Curated edits", meta: "Weekly drops", description: "Fresh collections with clear product storytelling." },
+        ],
+      },
+    ];
+  }
+
+  return [
+    {
+      eyebrow: "Launch-ready",
+      title: `A polished first version for ${prompt}`,
+      description: "Responsive sections, realistic content, strong hierarchy, and a complete visual system.",
+      items: [
+        { title: "Premium hero", meta: "Clear CTA and proof", description: "A first screen with strong messaging, supporting copy, and visual depth." },
+        { title: "Feature grid", meta: "Useful details", description: "Cards with specific benefits, icons, hover states, and real microcopy." },
+        { title: "Workflow section", meta: "Step-by-step", description: "Explains how the product works with polished layout rhythm." },
+        { title: "Pricing and FAQ", meta: "Conversion ready", description: "Practical plan cards, objections, and footer navigation." },
+      ],
+    },
+    {
+      eyebrow: "Built for every screen",
+      title: "Responsive from mobile to desktop",
+      description: "The layout stacks cleanly, keeps readable type, and preserves strong spacing.",
+      items: [
+        { title: "Mobile nav", meta: "Compact", description: "Navigation collapses into clean, thumb-friendly actions." },
+        { title: "Balanced grids", meta: "Adaptive", description: "Cards move from single column to multi-column layouts." },
+        { title: "Readable copy", meta: "Accessible", description: "Contrast, line length, and hierarchy stay comfortable." },
+      ],
+    },
+  ];
+}
+
+function renderReliablePreview({
+  title,
+  prompt,
+  sections,
+  theme,
+  websiteType,
+}: {
+  title: string;
+  prompt: string;
+  sections: ReliableSection[];
+  theme: ReliableTheme;
+  websiteType: WebsiteType;
+}) {
+  const navItems = websiteType === "social-feed" ? ["Home", "Explore", "Messages", "Profile"] : ["Overview", "Features", "Showcase", "FAQ"];
+  const hero = sections[0];
+
+  return `<main class="reliable-site ${websiteType}">
+  <nav class="reliable-nav">
+    <strong>${escapeHtml(title)}</strong>
+    <div>${navItems.map((item) => `<a href="#">${escapeHtml(item)}</a>`).join("")}</div>
+    <button>${websiteType.includes("dashboard") || websiteType.includes("social") ? "Open app" : "Get started"}</button>
+  </nav>
+  <section class="reliable-hero">
+    <div>
+      <p class="eyebrow">${escapeHtml(hero.eyebrow)}</p>
+      <h1>${escapeHtml(hero.title)}</h1>
+      <span>${escapeHtml(hero.description)}</span>
+      <div class="hero-actions"><button>Start building</button><button class="secondary">View demo</button></div>
+    </div>
+    <aside class="preview-panel">
+      ${hero.items
+        .slice(0, 4)
+        .map(
+          (item, index) => `<article>
+        <i>${String(index + 1).padStart(2, "0")}</i>
+        <div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.meta)}</p><small>${escapeHtml(item.description)}</small></div>
+      </article>`,
+        )
+        .join("")}
+    </aside>
+  </section>
+  ${sections
+    .map(
+      (section) => `<section class="reliable-section">
+    <div class="section-head"><p class="eyebrow">${escapeHtml(section.eyebrow)}</p><h2>${escapeHtml(section.title)}</h2><span>${escapeHtml(section.description)}</span></div>
+    <div class="reliable-grid">${section.items
+      .map(
+        (item) => `<article class="reliable-card">
+      <span>${escapeHtml(item.meta)}</span>
+      <h3>${escapeHtml(item.title)}</h3>
+      <p>${escapeHtml(item.description)}</p>
+    </article>`,
+      )
+      .join("")}</div>
+  </section>`,
+    )
+    .join("")}
+  <footer><strong>${escapeHtml(title)}</strong><span>Generated from: ${escapeHtml(prompt)}</span></footer>
+</main>`;
+}
+
+function renderReliableCss(theme: ReliableTheme) {
+  return `*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:${theme.background};color:${theme.text};font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,a{font:inherit}.reliable-site{min-height:100vh;background:radial-gradient(circle at 12% 0%,${theme.accentSoft},transparent 28rem),${theme.background};padding:24px;color:${theme.text}}.reliable-nav,.reliable-hero,.reliable-section,footer{max-width:1180px;margin-left:auto;margin-right:auto}.reliable-nav{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid ${theme.border};border-radius:999px;background:${theme.surface};padding:14px 16px 14px 22px;backdrop-filter:blur(18px);box-shadow:0 24px 80px rgba(0,0,0,.16)}.reliable-nav strong{font-size:24px;letter-spacing:-.045em}.reliable-nav div{display:flex;gap:6px;flex-wrap:wrap}.reliable-nav a{border-radius:999px;color:${theme.muted};padding:9px 12px;text-decoration:none}.reliable-nav a:hover{background:${theme.accentSoft};color:${theme.text}}button{border:0;border-radius:999px;background:${theme.text};color:${theme.background};cursor:pointer;font-weight:850;padding:12px 17px;transition:transform .2s,opacity .2s}button:hover{opacity:.9;transform:translateY(-1px)}.secondary{border:1px solid ${theme.border};background:transparent;color:${theme.text}}.reliable-hero{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:stretch;padding:52px 0 24px}.reliable-hero>div,.preview-panel,.reliable-card,.section-head{border:1px solid ${theme.border};background:${theme.surface};box-shadow:0 30px 100px rgba(0,0,0,.16)}.reliable-hero>div{align-content:center;border-radius:36px;padding:52px}.eyebrow{color:${theme.accent};font-size:12px;font-weight:900;letter-spacing:.18em;margin:0;text-transform:uppercase}.reliable-hero h1{font-size:clamp(46px,7vw,82px);font-weight:720;letter-spacing:-.065em;line-height:.9;margin:18px 0}.reliable-hero span,.section-head span,.reliable-card p,.preview-panel small,footer span{color:${theme.muted};line-height:1.72}.reliable-hero span{display:block;font-size:18px;max-width:690px}.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}.preview-panel{display:grid;align-content:end;gap:12px;border-radius:36px;min-height:520px;padding:22px;background:linear-gradient(145deg,${theme.surface},${theme.accentSoft})}.preview-panel article{display:grid;grid-template-columns:44px 1fr;gap:12px;border:1px solid ${theme.border};border-radius:22px;background:${theme.surface};padding:15px}.preview-panel i{display:grid;place-items:center;width:38px;height:38px;border-radius:999px;background:${theme.accentSoft};color:${theme.accent};font-style:normal;font-weight:900}.preview-panel h3,.reliable-card h3{margin:0;color:${theme.text};letter-spacing:-.025em}.preview-panel p{margin:4px 0;color:${theme.accent};font-size:13px;font-weight:800}.reliable-section{padding:16px 0}.section-head{border-radius:30px;margin-bottom:14px;padding:28px}.section-head h2{font-size:clamp(30px,4vw,52px);letter-spacing:-.055em;line-height:1;margin:12px 0}.reliable-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.reliable-card{border-radius:26px;padding:22px;min-height:190px}.reliable-card span{color:${theme.accent};font-size:12px;font-weight:900;text-transform:uppercase}.reliable-card h3{font-size:22px;margin:18px 0 10px}footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:34px 0;color:${theme.muted}}@media(max-width:980px){.reliable-hero{grid-template-columns:1fr}.preview-panel{min-height:auto}.reliable-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:680px){.reliable-site{padding:14px}.reliable-nav,footer{align-items:flex-start;flex-direction:column;border-radius:26px}.reliable-hero{padding:18px 0}.reliable-hero>div{padding:30px}.reliable-hero h1{font-size:42px}.reliable-grid{grid-template-columns:1fr}.preview-panel article{grid-template-columns:1fr}}`;
+}
+
+function renderReliableApp({
+  title,
+  prompt,
+  sections,
+  theme,
+  websiteType,
+}: {
+  title: string;
+  prompt: string;
+  sections: ReliableSection[];
+  theme: ReliableTheme;
+  websiteType: WebsiteType;
+}) {
+  return `const sections = ${JSON.stringify(sections, null, 2)};
+const navItems = ${JSON.stringify(websiteType === "social-feed" ? ["Home", "Explore", "Messages", "Profile"] : ["Overview", "Features", "Showcase", "FAQ"])};
+
+export default function App() {
+  const hero = sections[0];
+
+  return (
+    <main className="min-h-screen bg-[${theme.background}] px-4 py-4 text-[${theme.text}] sm:px-6">
+      <nav className="mx-auto flex max-w-6xl flex-col gap-4 rounded-[28px] border border-white/10 bg-white/[0.07] px-5 py-4 shadow-2xl shadow-black/10 backdrop-blur md:flex-row md:items-center md:justify-between">
+        <strong className="text-2xl tracking-[-0.045em]">${escapeJsx(title)}</strong>
+        <div className="flex flex-wrap gap-2">{navItems.map((item) => <a className="rounded-full px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white" href="#" key={item}>{item}</a>)}</div>
+        <button className="rounded-full bg-white px-4 py-3 text-sm font-bold text-zinc-950">Get started</button>
+      </nav>
+
+      <section className="mx-auto grid max-w-6xl gap-6 py-10 lg:grid-cols-[1.05fr_.95fr]">
+        <div className="rounded-[36px] border border-white/10 bg-white/[0.07] p-8 shadow-2xl shadow-black/10 md:p-12">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">{hero.eyebrow}</p>
+          <h1 className="mt-5 max-w-3xl text-5xl font-bold leading-[0.9] tracking-[-0.065em] md:text-7xl">{hero.title}</h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">{hero.description}</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button className="rounded-full bg-white px-5 py-3 font-bold text-zinc-950">Start building</button>
+            <button className="rounded-full border border-white/10 px-5 py-3 font-bold text-white">View demo</button>
+          </div>
+        </div>
+        <aside className="grid content-end gap-3 rounded-[36px] border border-white/10 bg-gradient-to-br from-white/[0.08] to-sky-400/10 p-5 shadow-2xl shadow-black/10">
+          {hero.items.slice(0, 4).map((item, index) => (
+            <article className="grid grid-cols-[44px_1fr] gap-3 rounded-3xl border border-white/10 bg-white/[0.07] p-4" key={item.title}>
+              <i className="grid h-10 w-10 place-items-center rounded-full bg-sky-400/10 text-sm font-black not-italic text-sky-300">{String(index + 1).padStart(2, "0")}</i>
+              <div>
+                <h3 className="font-semibold tracking-[-0.02em]">{item.title}</h3>
+                <p className="mt-1 text-sm font-bold text-sky-300">{item.meta}</p>
+                <small className="mt-2 block leading-6 text-zinc-400">{item.description}</small>
+              </div>
+            </article>
+          ))}
+        </aside>
+      </section>
+
+      {sections.map((section) => (
+        <section className="mx-auto max-w-6xl py-3" key={section.title}>
+          <div className="mb-4 rounded-[30px] border border-white/10 bg-white/[0.07] p-7">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">{section.eyebrow}</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-[-0.055em] md:text-5xl">{section.title}</h2>
+            <p className="mt-3 max-w-3xl leading-7 text-zinc-400">{section.description}</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {section.items.map((item) => (
+              <article className="min-h-48 rounded-[26px] border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 transition hover:-translate-y-1 hover:bg-white/[0.1]" key={item.title}>
+                <span className="text-xs font-black uppercase text-sky-300">{item.meta}</span>
+                <h3 className="mt-4 text-xl font-semibold tracking-[-0.025em]">{item.title}</h3>
+                <p className="mt-3 leading-7 text-zinc-400">{item.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <footer className="mx-auto flex max-w-6xl flex-col gap-2 py-8 text-zinc-500 md:flex-row md:items-center md:justify-between">
+        <strong>${escapeJsx(title)}</strong>
+        <span>Generated from: ${escapeJsx(prompt)}</span>
+      </footer>
+    </main>
+  );
+}
+`;
+}
+
+function createReliableFiles(appFile: string, title: string): z.infer<typeof generationSchema>["files"] {
+  return [
+    {
+      path: "package.json",
+      content: JSON.stringify(
+        {
+          scripts: { dev: "vite", build: "vite build", preview: "vite preview" },
+          dependencies: { "@vitejs/plugin-react": "^4.3.1", autoprefixer: "^10.4.20", postcss: "^8.4.49", react: "^18.2.0", "react-dom": "^18.2.0", tailwindcss: "^3.4.17", vite: "^5.4.0" },
+          devDependencies: {},
+        },
+        null,
+        2,
+      ),
+    },
+    { path: "index.html", content: `<title>${escapeHtml(title)}</title><div id="root"></div><script type="module" src="/src/main.jsx"></script>\n` },
+    { path: "src/main.jsx", content: "import React from 'react';\nimport { createRoot } from 'react-dom/client';\nimport './index.css';\nimport App from './App.jsx';\n\ncreateRoot(document.getElementById('root')).render(<App />);\n" },
+    { path: "src/App.jsx", content: appFile },
+    { path: "src/index.css", content: "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { margin: 0; }\n" },
+    { path: "tailwind.config.js", content: "export default { content: ['./index.html', './src/**/*.{js,jsx}'], theme: { extend: {} }, plugins: [] };\n" },
+    { path: "postcss.config.js", content: "export default { plugins: { tailwindcss: {}, autoprefixer: {} } };\n" },
+    { path: "README.md", content: `# ${title}\n\nGenerated by Mosaic.\n` },
+  ];
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeJsx(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function toTitleCase(value: string) {
+  return value.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).replace(/\s+/g, " ").trim();
 }
 
 async function improveGenerationQuality({
